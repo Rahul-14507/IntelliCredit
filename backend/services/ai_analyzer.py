@@ -132,6 +132,43 @@ demo_json = {
     "Supply chain constraint risks noted in MDA",
     "Current ratio of 1.58 is adequate but leaves room for improvement"
   ],
+  "document_consistency": {
+    "overall_consistency_score": 95,
+    "checks_performed": [
+      {
+        "check_name": "Revenue Consistency",
+        "document_a": "FY23 P&L",
+        "document_b": "GSTR-3B Summary",
+        "value_a": "₹47.20 Cr",
+        "value_b": "₹46.85 Cr",
+        "variance_pct": 0.74,
+        "status": "CONSISTENT",
+        "flag": None
+      },
+      {
+        "check_name": "Director Consistency",
+        "document_a": "MCA COI",
+        "document_b": "Board Resolution",
+        "value_a": "Rahul Pujari, Anjali Sharma",
+        "value_b": "Rahul Pujari, Anjali Sharma",
+        "variance_pct": None,
+        "status": "CONSISTENT",
+        "flag": None
+      },
+      {
+        "check_name": "Debt Consistency",
+        "document_a": "Balance Sheet",
+        "document_b": "Sanction Letter",
+        "value_a": "₹21.80 Cr",
+        "value_b": "₹21.80 Cr",
+        "variance_pct": 0,
+        "status": "CONSISTENT",
+        "flag": None
+      }
+    ],
+    "red_flags": [],
+    "summary": "High degree of consistency observed between tax filings and audited financials."
+  },
   "data_quality_notes": [
     "No live eCourts or MCA data pulled; analysis relies exclusively on uploaded documents."
   ]
@@ -273,6 +310,23 @@ this structure. No preamble, no explanation, no markdown — just the JSON:
   "data_quality_notes": [
     "Note any important data that was missing or unclear in the uploaded documents"
   ],
+  "document_consistency": {
+    "overall_consistency_score": integer 0-100,
+    "checks_performed": [
+      {
+        "check_name": "string",
+        "document_a": "string",
+        "document_b": "string", 
+        "value_a": "string",
+        "value_b": "string",
+        "variance_pct": number or null,
+        "status": "CONSISTENT or MINOR_VARIANCE or MAJOR_VARIANCE or UNABLE_TO_CHECK",
+        "flag": "string explanation if variance detected"
+      }
+    ],
+    "red_flags": ["list of serious inconsistencies only"],
+    "summary": "1-2 sentences"
+  },
   "field_observations": [
     "List of any site visit or field observations provided by the officer"
   ]
@@ -293,6 +347,13 @@ SCORING RULES YOU MUST FOLLOW:
 - Counterfactuals: generate exactly 3, targeting the 3 lowest-scoring dimensions. Each must reference actual numbers from the documents.
 - Strengths: generate exactly 3, each with a specific number from the document.
 - Risks: generate exactly 3, each specific.
+- DOCUMENT CONSISTENCY CHECKS — perform all of these cross-document verifications:
+  1. Revenue Consistency: Compare revenue declared in annual report/P&L vs revenue implied by total GST taxable turnover (multiply monthly average by 12). Flag if variance > 10%.
+  2. Director Consistency: Check if director names mentioned in different documents match each other. Flag any name appearing in one document but not another.
+  3. Debt Consistency: Compare total debt in balance sheet vs loan amounts mentioned in banking details or sanction letters. Flag if variance > 5%.
+  4. Profit Consistency: Check if net profit in P&L is consistent with retained earnings movement in balance sheet. Flag if inconsistent.
+  5. If any check cannot be performed because relevant documents were not uploaded, mark status as UNABLE_TO_CHECK.
+- For overall_consistency_score: start 100, deduct 15 per MAJOR_VARIANCE, 5 per MINOR_VARIANCE.
 """
 
 def extract_json(rs):

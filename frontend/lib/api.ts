@@ -17,6 +17,28 @@ export interface DimensionScore {
   mda_found?: boolean;
 }
 
+export interface ConsistencyCheck {
+  check_name: string;
+  document_a: string;
+  document_b: string;
+  value_a: string;
+  value_b: string;
+  variance_pct: number | null;
+  status:
+    | "CONSISTENT"
+    | "MINOR_VARIANCE"
+    | "MAJOR_VARIANCE"
+    | "UNABLE_TO_CHECK";
+  flag?: string;
+}
+
+export interface DocumentConsistency {
+  overall_consistency_score: number;
+  checks_performed: ConsistencyCheck[];
+  red_flags: string[];
+  summary: string;
+}
+
 export interface AnalysisResult {
   company_name: string;
   analysis_summary: string;
@@ -47,6 +69,7 @@ export interface AnalysisResult {
     grade: string;
     recommended_action: string;
   };
+  document_consistency?: DocumentConsistency;
   lending_recommendation: {
     suggested_limit_crores: number;
     interest_rate_pct: number;

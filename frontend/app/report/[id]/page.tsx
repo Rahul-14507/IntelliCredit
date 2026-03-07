@@ -18,6 +18,7 @@ import {
   Plus,
   Minus,
   IndianRupee,
+  ShieldCheck,
 } from "lucide-react";
 import {
   BarChart,
@@ -143,7 +144,7 @@ export default function ReportPage() {
     );
   }
 
-  if (error || !data || !data.analysis) {
+  if (error || !data || !data.analysis || !data.analysis.dimension_scores) {
     return (
       <div className="container mx-auto p-8 max-w-4xl text-center">
         <div className="bg-red-50 border border-red-200 text-red-800 p-6 rounded-xl">
@@ -162,7 +163,7 @@ export default function ReportPage() {
   }
 
   const ans = data.analysis;
-  const dims = ans.dimension_scores;
+  const dims = ans.dimension_scores || {};
 
   const chartData = [
     { name: "Financial Health", score: dims.financial_health?.score || 0 },
@@ -727,6 +728,141 @@ export default function ReportPage() {
                 companyName={ans.company_name}
               />
             </div>
+
+            {/* DOCUMENT CONSISTENCY AUDIT */}
+            {ans.document_consistency && (
+              <div className="bg-white p-6 rounded-xl border shadow-sm">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide flex items-center">
+                    <ShieldCheck className="h-4 w-4 mr-2" /> Document
+                    Consistency Audit
+                  </h3>
+                  <div
+                    className={`flex items-center space-x-2 px-3 py-1 rounded-lg border font-bold text-sm ${
+                      ans.document_consistency.overall_consistency_score >= 85
+                        ? "bg-green-50 text-green-700 border-green-200"
+                        : ans.document_consistency.overall_consistency_score >=
+                            70
+                          ? "bg-amber-50 text-amber-700 border-amber-200"
+                          : "bg-red-50 text-red-700 border-red-200"
+                    }`}
+                  >
+                    <ShieldCheck className="h-4 w-4" />
+                    <span>
+                      Consistency Score:{" "}
+                      {ans.document_consistency.overall_consistency_score}
+                    </span>
+                  </div>
+                </div>
+
+                {ans.document_consistency.red_flags.length > 0 && (
+                  <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+                    <h4 className="text-xs font-bold text-red-800 uppercase mb-2 flex items-center">
+                      <AlertTriangle className="h-3 w-3 mr-2" /> Serious
+                      Inconsistencies Detected
+                    </h4>
+                    <ul className="space-y-1">
+                      {ans.document_consistency.red_flags.map((flag, i) => (
+                        <li
+                          key={i}
+                          className="text-sm text-red-700 font-medium flex items-start"
+                        >
+                          <span className="mr-2">•</span> {flag}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b text-slate-400 font-bold uppercase text-[10px] tracking-wider">
+                        <th className="pb-3 pr-4">Check Name</th>
+                        <th className="pb-3 pr-4">Status</th>
+                        <th className="pb-3">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {ans.document_consistency.checks_performed.map(
+                        (check, i) => (
+                          <tr
+                            key={i}
+                            className="group hover:bg-slate-50 transition-colors"
+                          >
+                            <td className="py-4 pr-4 align-top font-bold text-slate-700">
+                              {check.check_name}
+                            </td>
+                            <td className="py-4 pr-4 align-top">
+                              {(() => {
+                                switch (check.status) {
+                                  case "CONSISTENT":
+                                    return (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700">
+                                        ✓ Consistent
+                                      </span>
+                                    );
+                                  case "MINOR_VARIANCE":
+                                    return (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">
+                                        ⚠ Minor Variance
+                                      </span>
+                                    );
+                                  case "MAJOR_VARIANCE":
+                                    return (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700">
+                                        ✗ Major Variance
+                                      </span>
+                                    );
+                                  default:
+                                    return (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-500">
+                                        — Unable to Check
+                                      </span>
+                                    );
+                                }
+                              })()}
+                            </td>
+                            <td className="py-4 align-top">
+                              <div className="space-y-1">
+                                <p className="text-slate-600 text-xs">
+                                  {check.document_a}:{" "}
+                                  <span className="font-bold text-slate-900">
+                                    {check.value_a}
+                                  </span>
+                                </p>
+                                <p className="text-slate-600 text-xs">
+                                  {check.document_b}:{" "}
+                                  <span className="font-bold text-slate-900">
+                                    {check.value_b}
+                                  </span>
+                                </p>
+                                {check.variance_pct !== null && (
+                                  <p
+                                    className={`text-[10px] font-bold ${check.variance_pct > 10 ? "text-red-600" : "text-slate-500"}`}
+                                  >
+                                    Variance: {check.variance_pct}%
+                                  </p>
+                                )}
+                                {check.flag && (
+                                  <p className="text-[10px] text-red-600 italic font-medium mt-1">
+                                    Flag: {check.flag}
+                                  </p>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ),
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-6 pt-4 border-t italic text-xs text-slate-500">
+                  <p>Summary: {ans.document_consistency.summary}</p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* RIGHT COLUMN: Decision, Terms & Target Fixes */}

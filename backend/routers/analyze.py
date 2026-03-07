@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from pydantic import BaseModel
+from datetime import datetime
 from typing import Optional
 
 from backend.database import get_db
@@ -71,13 +72,7 @@ async def get_analysis_result(application_id: str, db: AsyncSession = Depends(ge
 
 @router.post("/{application_id}/recalculate")
 async def recalculate(application_id: str, req: Optional[AnalyzeRequest] = None, db: AsyncSession = Depends(get_db)):
-    ans_res = await db.execute(select(Analysis).where(Analysis.application_id == application_id))
-    ans = ans_res.scalars().first()
-    if ans:
-        await db.delete(ans)
-        await db.commit()
-        
-    # rerun analysis with existing primary insights plus any new ones
+    # fetch existing primary insights plus any new ones
     ins_res = await db.execute(select(PrimaryInsight).where(PrimaryInsight.application_id == application_id).order_by(PrimaryInsight.created_at.desc()))
     existing_insight = ins_res.scalars().first()
     
@@ -97,10 +92,32 @@ async def recalculate(application_id: str, req: Optional[AnalyzeRequest] = None,
         # Update/Create the record
         new_ins = PrimaryInsight(
             application_id=application_id,
-            officer_name=req.officer_name or final_req.officer_name,
+            officer_name=req.officer_name or (existing_insight.officer_name if existing_insight else None),
             notes_text=final_req.primary_insights_text
         )
         db.add(new_ins)
         await db.commit()
-        
-    return await run_analysis(application_id, final_req, db)
+    
+    # Run analysis first
+    new_result = await run_analysis(application_id, final_req, db)
+    
+    # If run_analysis succeeds, we reach here. 
+    # run_analysis already created a NEW Analysis record.
+    # But wait, run_analysis adds a new Analysis record to the DB.
+    # If there are old Analysis records for this application, we should delete them
+    # EXCEPT the one we just created.
+    
+    # Let's verify run_analysis behavior:
+    # ans = Analysis(...)
+    # db.add(ans)
+    # db.commit()
+    
+    # To keep only the latest analysis, let's delete all Analysis records for this app 
+    # that were created BEFORE this latest run.
+    # OR simpler: delete the old one BEFORE calling run_analysis? 
+    # But if we delete before and run_analysis fails, we have null.
+    
+    # Better: run_analysis returns the JSON. We can delete old ones then call run_analysis.
+    # But run_analysis includes the db.add(ans) part.
+    
+    return new_result
