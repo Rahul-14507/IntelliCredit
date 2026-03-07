@@ -1,0 +1,477 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import {
+  Download,
+  ArrowLeft,
+  ShieldAlert,
+  CheckCircle2,
+  RefreshCw,
+  TrendingUp,
+  AlertTriangle,
+  FileText,
+  Activity,
+} from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  LabelList,
+} from "recharts";
+
+import {
+  ApplicationDetail,
+  getApplicationDetail,
+  recalculateScore,
+  getCAMUrl,
+} from "@/lib/api";
+import ScoreRadar from "@/components/ScoreRadar";
+import PromoterGraph from "@/components/PromoterGraph";
+import DimensionBar from "@/components/DimensionBar";
+import CounterfactualCard from "@/components/CounterfactualCard";
+import LendingTermsCard from "@/components/LendingTermsCard";
+
+export default function ReportPage() {
+  const params = useParams();
+  const router = useRouter();
+  const id = params.id as string;
+
+  const [data, setData] = useState<ApplicationDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [recalculating, setRecalculating] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = async () => {
+    try {
+      setLoading(true);
+      const appData = await getApplicationDetail(id);
+      setData(appData);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (id) load();
+  }, [id]);
+
+  const handleRecalculate = async () => {
+    try {
+      setRecalculating(true);
+      await recalculateScore(id);
+      await load();
+    } catch (e: any) {
+      alert(`Recalculation failed: ${e.message}`);
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
+  if (loading || recalculating) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center flex-col">
+        <Loader2 className="h-10 w-10 text-blue-600 animate-spin mb-4" />
+        <h2 className="text-xl font-semibold">
+          {recalculating
+            ? "Azure OpenAI is re-evaluating the credit profile..."
+            : "Compiling Synthetic Underwriting Model..."}
+        </h2>
+      </div>
+    );
+  }
+
+  if (error || !data || !data.analysis) {
+    return (
+      <div className="container mx-auto p-8 max-w-4xl text-center">
+        <div className="bg-red-50 border border-red-200 text-red-800 p-6 rounded-xl">
+          <AlertTriangle className="h-12 w-12 mx-auto mb-4" />
+          <h2 className="text-xl font-bold mb-2">Error Loading Report</h2>
+          <p>{error || "Analysis data not found."}</p>
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="mt-4 underline"
+          >
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const ans = data.analysis;
+  const dims = ans.dimension_scores;
+
+  const chartData = [
+    { name: "Financial Health", score: dims.financial_health?.score || 0 },
+    { name: "GST Consistency", score: dims.gst_consistency?.score || 0 },
+    { name: "Promoter Risk", score: dims.promoter_risk?.score || 0 },
+    { name: "Litigation/Reg.", score: dims.litigation_regulatory?.score || 0 },
+    { name: "Linguistic Stress", score: dims.linguistic_stress?.score || 0 },
+  ];
+
+  const summaryScore = ans.scoring?.total_score || 0;
+  const summaryGrade = ans.scoring?.grade || "D";
+  const recAction = ans.scoring?.recommended_action || "Reject";
+
+  const getGradeColor = (g: string) => {
+    if (g === "A") return "bg-green-100 text-green-800";
+    if (g === "B") return "bg-green-50 text-green-700";
+    if (g === "C") return "bg-orange-100 text-orange-800";
+    return "bg-red-100 text-red-800";
+  };
+
+  const getActionColor = (a: string) => {
+    if (a === "Approve") return "bg-green-600 hover:bg-green-700 text-white";
+    if (a === "Reject") return "bg-red-600 hover:bg-red-700 text-white";
+    return "bg-orange-600 hover:bg-orange-700 text-white";
+  };
+
+  return (
+    <div className="min-h-screen bg-[#f8fafc] text-slate-800 pb-12 font-sans">
+      {/* HEADER */}
+      <div className="bg-white border-b sticky top-0 z-40 shadow-sm">
+        <div className="container mx-auto px-4 py-4 max-w-7xl flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div>
+              <h1 className="text-2xl font-black text-slate-900 leading-tight tracking-tight">
+                {ans.company_name}
+              </h1>
+              <div className="flex items-center text-sm font-medium text-slate-500 mt-0.5 space-x-3">
+                <span className="flex items-center">
+                  <FileText className="h-3.5 w-3.5 mr-1" /> CIN {data.cin}
+                </span>
+                <span className="flex items-center">
+                  <TrendingUp className="h-3.5 w-3.5 mr-1" /> {data.industry}
+                </span>
+                <span className="flex items-center">
+                  <IndianRupee className="h-3.5 w-3.5 mr-1" /> Req Limit ₹
+                  {data.requested_limit_crores} Cr
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3 w-full md:w-auto">
+            <button
+              onClick={handleRecalculate}
+              disabled={recalculating}
+              className="flex-1 md:flex-none border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 text-sm font-semibold rounded-md flex items-center justify-center transition-colors"
+            >
+              <RefreshCw className="mr-2 h-4 w-4" /> Recalculate Score
+            </button>
+            <a
+              href={getCAMUrl(id)}
+              download
+              className="flex-1 md:flex-none bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 text-sm font-semibold rounded-md flex items-center justify-center transition-colors shadow-sm"
+            >
+              <Download className="mr-2 h-4 w-4" /> Export CAM
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div className="container mx-auto px-4 py-6 max-w-7xl">
+        {/* TOP KPI CARDS */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white p-5 rounded-xl border shadow-sm relative overflow-hidden group">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+              Overall Grade
+            </p>
+            <div className="flex items-end">
+              <span className="text-4xl font-black">{summaryGrade}</span>
+            </div>
+            <div
+              className={`absolute -right-4 -bottom-4 h-24 w-24 rounded-full opacity-20 transition-transform group-hover:scale-110 ${getGradeColor(summaryGrade)}`}
+            ></div>
+          </div>
+
+          <div className="bg-white p-5 rounded-xl border shadow-sm relative overflow-hidden group">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+              Total Score
+            </p>
+            <div className="flex items-baseline space-x-1">
+              <span className="text-4xl font-black text-slate-800">
+                {summaryScore}
+              </span>
+              <span className="text-sm font-bold text-slate-400">/ 100</span>
+            </div>
+            <div className="absolute -right-4 -bottom-4 h-24 w-24 rounded-full opacity-10 bg-blue-500 transition-transform group-hover:scale-110"></div>
+          </div>
+
+          <div className="bg-white p-5 rounded-xl border shadow-sm relative overflow-hidden group">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+              Rec. Limit
+            </p>
+            <div className="flex items-baseline space-x-1">
+              <span className="text-4xl font-black text-slate-800">
+                ₹{ans.lending_recommendation?.suggested_limit_crores}
+              </span>
+              <span className="text-sm font-bold text-slate-400">Cr</span>
+            </div>
+          </div>
+
+          <div className="bg-white p-5 rounded-xl border shadow-sm relative overflow-hidden group">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+              Pricing
+            </p>
+            <div className="flex items-baseline space-x-1">
+              <span className="text-4xl font-black text-slate-800">
+                {ans.lending_recommendation?.interest_rate_pct}%
+              </span>
+              <span className="text-sm font-bold text-slate-400">Yield</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+          {/* LEFT COLUMN: Summary & Scorecard */}
+          <div className="md:col-span-8 space-y-6">
+            {/* EXECUTIVE SUMMARY */}
+            <div className="bg-white p-6 rounded-xl border shadow-sm">
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-3 flex items-center">
+                <ShieldAlert className="h-4 w-4 mr-2" /> Executive Summary
+              </h3>
+              <p className="text-slate-700 leading-relaxed text-sm">
+                {ans.analysis_summary}
+              </p>
+            </div>
+
+            {/* AI SCORE BREAKDOWN (Recharts & Radar) */}
+            <div className="bg-white p-6 rounded-xl border shadow-sm">
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-6 flex items-center">
+                <Activity className="h-4 w-4 mr-2" /> Credit Profile Dimensions
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+                {/* Bar Chart */}
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={chartData}
+                      margin={{ top: 20, right: 0, left: -25, bottom: 20 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        vertical={false}
+                        stroke="#e2e8f0"
+                      />
+                      <XAxis
+                        dataKey="name"
+                        angle={-45}
+                        textAnchor="end"
+                        height={60}
+                        tick={{ fill: "#64748b", fontSize: 11 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        domain={[0, 100]}
+                        tick={{ fill: "#64748b", fontSize: 11 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <Tooltip
+                        cursor={{ fill: "#f8fafc" }}
+                        contentStyle={{
+                          borderRadius: "8px",
+                          border: "1px solid #e2e8f0",
+                          boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                        }}
+                      />
+                      <Bar dataKey="score" radius={[4, 4, 0, 0]}>
+                        {chartData.map((e, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={
+                              e.score >= 80
+                                ? "#22c55e"
+                                : e.score >= 60
+                                  ? "#eab308"
+                                  : "#f97316"
+                            }
+                          />
+                        ))}
+                        <LabelList
+                          dataKey="score"
+                          position="top"
+                          style={{
+                            fill: "#475569",
+                            fontSize: 11,
+                            fontWeight: "bold",
+                          }}
+                        />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Radar Chart */}
+                <ScoreRadar dimensions={dims} />
+              </div>
+
+              <div className="space-y-1">
+                <DimensionBar
+                  label="Financial Health"
+                  desc="Assessment of profitability, leverage, and liquidity based on extracted tables"
+                  data={dims.financial_health}
+                />
+                <DimensionBar
+                  label="GST Consistency"
+                  desc="Variance analysis between modeled revenue and reported figures"
+                  data={dims.gst_consistency}
+                />
+                <DimensionBar
+                  label="Promoter Risk"
+                  desc="Director background analysis from provided documents"
+                  data={dims.promoter_risk}
+                />
+                <DimensionBar
+                  label="Litigation & Regulatory"
+                  desc="Scanning documents for mentions of adverse events"
+                  data={dims.litigation_regulatory}
+                />
+                <DimensionBar
+                  label="Linguistic Stress"
+                  desc="Textual analysis of tone, hedging, and uncertainty in management commentary"
+                  data={dims.linguistic_stress}
+                />
+              </div>
+            </div>
+
+            {/* STRENGTHS & RISKS */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white p-6 rounded-xl border shadow-sm">
+                <h3 className="text-sm font-bold text-emerald-700 uppercase tracking-wide mb-4">
+                  Strengths to Maintain
+                </h3>
+                <ul className="space-y-3">
+                  {(ans.strengths || []).map((s, i) => (
+                    <li
+                      key={i}
+                      className="flex items-start text-sm text-slate-700"
+                    >
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 mr-2 mt-0.5 shrink-0" />{" "}
+                      <span>{s}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="bg-white p-6 rounded-xl border shadow-sm">
+                <h3 className="text-sm font-bold text-rose-700 uppercase tracking-wide mb-4">
+                  Key Risks Identified
+                </h3>
+                <ul className="space-y-3">
+                  {(ans.risks || []).map((r, i) => (
+                    <li
+                      key={i}
+                      className="flex items-start text-sm text-slate-700"
+                    >
+                      <AlertTriangle className="h-4 w-4 text-rose-500 mr-2 mt-0.5 shrink-0" />{" "}
+                      <span>{r}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {/* MCA PROMOTER NETWORK */}
+            <div className="bg-white p-6 rounded-xl border shadow-sm">
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-4 flex items-center">
+                <ShieldAlert className="h-4 w-4 mr-2" /> Director Network
+                Extracted
+              </h3>
+              <PromoterGraph
+                directors={ans.directors || []}
+                companyName={ans.company_name}
+              />
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN: Decision, Terms & Target Fixes */}
+          <div className="md:col-span-4 space-y-6">
+            {/* UNDERWRITING DECISION */}
+            <div className="bg-white border rounded-xl p-6 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-4">
+                System Recommendation
+              </h3>
+
+              <div
+                className={`w-full py-4 text-center rounded-md font-black text-xl mb-4 tracking-tight shadow-sm ${getGradeColor(summaryGrade)}`}
+              >
+                {recAction.toUpperCase()}
+              </div>
+
+              <p className="text-sm text-slate-600 mb-6 leading-relaxed">
+                Based on the Five Cs framework, financial score weighting, and
+                analysis of {ans.directors?.length || 0} extracted directors.
+              </p>
+
+              <button
+                className={`w-full py-3 rounded-md font-bold text-sm shadow-md transition-all ${getActionColor(recAction)}`}
+              >
+                Confirm Decision
+              </button>
+              <button className="w-full mt-3 py-2 rounded-md font-semibold text-sm text-slate-500 border border-slate-200 hover:bg-slate-50 transition-colors">
+                Apply Manual Override
+              </button>
+            </div>
+
+            {/* LENDING TERMS */}
+            <LendingTermsCard data={data} />
+
+            {/* TARGETED FIXES */}
+            <div className="bg-white border rounded-xl p-6 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-4 flex items-center">
+                <TrendingUp className="h-4 w-4 mr-2" /> Value-Add Opportunities
+              </h3>
+              <p className="text-xs text-slate-500 mb-4 pb-4 border-b">
+                Actionable counterfactuals generated by Azure OpenAI to optimize
+                the borrower's credit profile.
+              </p>
+
+              <div className="space-y-3">
+                {(ans.counterfactuals || []).map((cf, i) => (
+                  <CounterfactualCard key={i} cf={cf} />
+                ))}
+              </div>
+            </div>
+
+            {/* DATA QUALITY EXCLUSIONS */}
+            {ans.data_quality_notes && ans.data_quality_notes.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 shadow-sm">
+                <h3 className="text-sm font-bold text-amber-900 uppercase tracking-wide mb-3 flex items-center">
+                  <AlertTriangle className="h-4 w-4 mr-2" /> Epistemic Notes
+                </h3>
+                <ul className="space-y-2">
+                  {ans.data_quality_notes.map((n, i) => (
+                    <li key={i} className="text-xs text-amber-800 leading-snug">
+                      • {n}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Icon Imports fix
+import { IndianRupee, Loader2 } from "lucide-react";
