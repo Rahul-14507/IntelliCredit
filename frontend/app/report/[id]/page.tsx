@@ -12,6 +12,11 @@ import {
   AlertTriangle,
   FileText,
   Activity,
+  Target,
+  Info,
+  RotateCcw,
+  Plus,
+  Minus,
 } from "lucide-react";
 import {
   BarChart,
@@ -51,11 +56,29 @@ export default function ReportPage() {
   const [error, setError] = useState("");
   const [documents, setDocuments] = useState<UploadedDocument[]>([]);
 
+  // Simulator State
+  const [simDE, setSimDE] = useState<number>(0);
+  const [simCR, setSimCR] = useState<number>(0);
+  const [simEBITDA, setSimEBITDA] = useState<number>(0);
+  const [simGrowth, setSimGrowth] = useState<number>(0);
+  const [simICR, setSimICR] = useState<number>(0);
+
   const load = async () => {
     try {
       setLoading(true);
       const appData = await getApplicationDetail(id);
       setData(appData);
+
+      // Initialize simulator values from actual metrics
+      const metrics =
+        appData.analysis.dimension_scores.financial_health?.key_metrics;
+      if (metrics) {
+        setSimDE(metrics.debt_to_equity || 0);
+        setSimCR(metrics.current_ratio || 0);
+        setSimEBITDA(metrics.ebitda_margin || 0);
+        setSimGrowth(metrics.revenue_growth || 0);
+        setSimICR(metrics.interest_coverage || 0);
+      }
       // Fetch documents separately so a failure won't break the report
       try {
         const docs = await getDocuments(id);
@@ -360,6 +383,278 @@ export default function ReportPage() {
                   desc="Textual analysis of tone, hedging, and uncertainty in management commentary"
                   data={dims.linguistic_stress}
                 />
+              </div>
+            </div>
+
+            {/* WHAT-IF SCENARIO SIMULATOR */}
+            <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 shadow-sm overflow-hidden relative">
+              <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                <Target className="h-24 w-24 text-blue-900" />
+              </div>
+
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                <div>
+                  <h3 className="text-lg font-black text-blue-900 flex items-center">
+                    🎯 Scenario Simulator — Test Credit Conditions
+                  </h3>
+                  <p className="text-xs text-blue-700 font-medium">
+                    Adjust financial levers to see real-time impact on scoring
+                    and pricing.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    const m =
+                      ans.dimension_scores.financial_health?.key_metrics;
+                    if (m) {
+                      setSimDE(m.debt_to_equity || 0);
+                      setSimCR(m.current_ratio || 0);
+                      setSimEBITDA(m.ebitda_margin || 0);
+                      setSimGrowth(m.revenue_growth || 0);
+                      setSimICR(m.interest_coverage || 0);
+                    }
+                  }}
+                  className="flex items-center text-xs font-bold text-blue-600 bg-white px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors shadow-sm"
+                >
+                  <RotateCcw className="h-3 w-3 mr-1.5" /> Reset to Actual
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                {/* Sliders */}
+                <div className="lg:col-span-7 space-y-5">
+                  {[
+                    {
+                      label: "Debt/Equity",
+                      val: simDE,
+                      set: setSimDE,
+                      min: 0.1,
+                      max: 5.0,
+                      step: 0.1,
+                      suffix: "",
+                      actual:
+                        ans.dimension_scores.financial_health?.key_metrics
+                          ?.debt_to_equity,
+                    },
+                    {
+                      label: "Current Ratio",
+                      val: simCR,
+                      set: setSimCR,
+                      min: 0.5,
+                      max: 3.0,
+                      step: 0.05,
+                      suffix: "",
+                      actual:
+                        ans.dimension_scores.financial_health?.key_metrics
+                          ?.current_ratio,
+                    },
+                    {
+                      label: "EBITDA Margin",
+                      val: simEBITDA,
+                      set: setSimEBITDA,
+                      min: 1,
+                      max: 50,
+                      step: 0.5,
+                      suffix: "%",
+                      actual:
+                        ans.dimension_scores.financial_health?.key_metrics
+                          ?.ebitda_margin,
+                    },
+                    {
+                      label: "Revenue Growth",
+                      val: simGrowth,
+                      set: setSimGrowth,
+                      min: -20,
+                      max: 50,
+                      step: 1,
+                      suffix: "%",
+                      actual:
+                        ans.dimension_scores.financial_health?.key_metrics
+                          ?.revenue_growth,
+                    },
+                    {
+                      label: "Interest Coverage",
+                      val: simICR,
+                      set: setSimICR,
+                      min: 0.5,
+                      max: 15,
+                      step: 0.1,
+                      suffix: "x",
+                      actual:
+                        ans.dimension_scores.financial_health?.key_metrics
+                          ?.interest_coverage,
+                    },
+                  ].map((s) => (
+                    <div key={s.label}>
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                          {s.label}
+                        </label>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-500 font-bold uppercase">
+                            Actual: {s.actual}
+                            {s.suffix}
+                          </span>
+                          <span className="text-sm font-black text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-200 shadow-sm">
+                            {s.val}
+                            {s.suffix}
+                          </span>
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min={s.min}
+                        max={s.max}
+                        step={s.step}
+                        value={s.val}
+                        onChange={(e) => s.set(parseFloat(e.target.value))}
+                        className="w-full h-1.5 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                    </div>
+                  ))}
+                  <p className="flex items-center text-[10px] text-blue-500 font-medium italic mt-4">
+                    <Info className="h-3 w-3 mr-1" /> Simulator uses extracted
+                    financial values. Other dimensions held constant.
+                  </p>
+                </div>
+
+                {/* Results Card */}
+                <div className="lg:col-span-5 bg-white rounded-2xl p-5 border border-blue-100 shadow-xl flex flex-col justify-between">
+                  {(() => {
+                    // Internal Logic for Simulation
+                    const sDE = (v: number) => {
+                      if (v < 0.75) return 95;
+                      if (v < 1.5) return 80;
+                      if (v < 2.5) return 60;
+                      if (v < 3.5) return 40;
+                      return 20;
+                    };
+                    const sCR = (v: number) => {
+                      if (v > 1.75) return 90;
+                      if (v >= 1.5) return 75;
+                      if (v >= 1.25) return 55;
+                      if (v >= 1.0) return 35;
+                      return 15;
+                    };
+                    const sEBITDA = (v: number) => {
+                      if (v > 30) return 95;
+                      if (v >= 20) return 80;
+                      if (v >= 12) return 65;
+                      if (v >= 5) return 40;
+                      return 20;
+                    };
+                    const sGrowth = (v: number) => {
+                      if (v > 20) return 95;
+                      if (v >= 10) return 80;
+                      if (v >= 5) return 65;
+                      if (v >= 0) return 50;
+                      return 20;
+                    };
+                    const sICR = (v: number) => {
+                      if (v > 8) return 95;
+                      if (v >= 5) return 80;
+                      if (v >= 3) return 65;
+                      if (v >= 1.5) return 45;
+                      return 20;
+                    };
+
+                    const simFH =
+                      sDE(simDE) * 0.25 +
+                      sCR(simCR) * 0.2 +
+                      sEBITDA(simEBITDA) * 0.25 +
+                      sGrowth(simGrowth) * 0.15 +
+                      sICR(simICR) * 0.15;
+
+                    const weights = { gst: 0.2, pr: 0.2, lr: 0.15, ls: 0.15 };
+                    const currentOverall =
+                      simFH * 0.3 +
+                      (dims.gst_consistency?.score || 0) * weights.gst +
+                      (dims.promoter_risk?.score || 0) * weights.pr +
+                      (dims.litigation_regulatory?.score || 0) * weights.lr +
+                      (dims.linguistic_stress?.score || 0) * weights.ls +
+                      (ans.scoring?.primary_insight_adjustment || 0);
+
+                    const finalScore = Math.round(currentOverall);
+                    const grade =
+                      finalScore >= 80
+                        ? "A"
+                        : finalScore >= 65
+                          ? "B"
+                          : finalScore >= 50
+                            ? "C"
+                            : "D";
+                    const rate = Math.min(
+                      18,
+                      9.5 + (100 - finalScore) * 0.08,
+                    ).toFixed(2);
+                    const delta = finalScore - (ans.scoring?.total_score || 0);
+
+                    return (
+                      <>
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2 mb-4">
+                            <span>Simulated Outcome</span>
+                            <div
+                              className={`flex items-center px-2 py-0.5 rounded text-[10px] ${delta >= 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
+                            >
+                              {delta >= 0 ? (
+                                <Plus className="h-2 w-2 mr-1" />
+                              ) : (
+                                <Minus className="h-2 w-2 mr-1" />
+                              )}
+                              {Math.abs(delta)} pts from actual
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-500 uppercase">
+                                Simulated FH Score
+                              </p>
+                              <p className="text-xl font-black text-blue-600">
+                                {Math.round(simFH)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-500 uppercase">
+                                Overall Score
+                              </p>
+                              <div className="flex items-baseline space-x-2">
+                                <span className="text-4xl font-black text-slate-900">
+                                  {finalScore}
+                                </span>
+                                <span className="text-sm font-bold text-slate-300">
+                                  / 100
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 pt-4 border-t mt-4">
+                          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">
+                              Grade
+                            </p>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-xs font-black ${getGradeColor(grade)}`}
+                            >
+                              {grade}
+                            </span>
+                          </div>
+                          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">
+                              Int. Rate
+                            </p>
+                            <span className="text-sm font-black text-slate-800">
+                              {rate}%
+                            </span>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
               </div>
             </div>
 
