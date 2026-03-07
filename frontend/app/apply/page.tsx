@@ -8,10 +8,11 @@ import {
   UploadCloud,
   FileText,
   CheckCircle2,
-  Loader2,
+  RefreshCw,
   ArrowRight,
 } from "lucide-react";
 import { createApplication, uploadDocuments, runAnalysis } from "@/lib/api";
+import SpeechTextArea from "@/components/SpeechTextArea";
 
 export default function ApplyPage() {
   const router = useRouter();
@@ -217,7 +218,7 @@ export default function ApplyPage() {
               className="w-full bg-blue-600 text-white p-3 rounded font-bold hover:bg-blue-700 flex justify-center"
             >
               {loading ? (
-                <Loader2 className="animate-spin h-5 w-5" />
+                <RefreshCw className="animate-spin h-5 w-5" />
               ) : (
                 "Save & Continue"
               )}
@@ -274,7 +275,7 @@ export default function ApplyPage() {
             >
               {loading ? (
                 <>
-                  <Loader2 className="animate-spin h-5 w-5 mr-2" /> Extracting
+                  <RefreshCw className="animate-spin h-5 w-5 mr-2" /> Extracting
                   with Azure DI...
                 </>
               ) : (
@@ -309,19 +310,13 @@ export default function ApplyPage() {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Observations
-              </label>
-              <textarea
-                className="w-full border p-2 rounded h-32"
-                placeholder="Enter qualitative observations from site visits, management meetings..."
-                value={insights.text}
-                onChange={(e) =>
-                  setInsights({ ...insights, text: e.target.value })
-                }
-              />
-            </div>
+            <SpeechTextArea
+              label="Observations"
+              sublabel="Speak your site visit observations"
+              placeholder="Enter qualitative observations from site visits, management meetings..."
+              value={insights.text}
+              onChange={(val) => setInsights({ ...insights, text: val })}
+            />
 
             <div className="flex space-x-4 pt-4 border-t">
               <button
@@ -344,7 +339,7 @@ export default function ApplyPage() {
           <div className="text-center py-10">
             {!analysisDone ? (
               <div className="flex flex-col items-center">
-                <Loader2 className="h-16 w-16 text-blue-600 animate-spin mb-6" />
+                <RefreshCw className="h-16 w-16 text-blue-600 animate-spin mb-6" />
                 <h3 className="text-xl font-bold mb-2">
                   Azure OpenAI is analyzing the profile...
                 </h3>

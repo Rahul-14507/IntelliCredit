@@ -17,6 +17,7 @@ import {
   RotateCcw,
   Plus,
   Minus,
+  IndianRupee,
 } from "lucide-react";
 import {
   BarChart,
@@ -44,6 +45,7 @@ import PromoterGraph from "@/components/PromoterGraph";
 import DimensionBar from "@/components/DimensionBar";
 import CounterfactualCard from "@/components/CounterfactualCard";
 import LendingTermsCard from "@/components/LendingTermsCard";
+import SpeechTextArea from "@/components/SpeechTextArea";
 
 export default function ReportPage() {
   const params = useParams();
@@ -55,6 +57,10 @@ export default function ReportPage() {
   const [recalculating, setRecalculating] = useState(false);
   const [error, setError] = useState("");
   const [documents, setDocuments] = useState<UploadedDocument[]>([]);
+
+  // Field Observation Modal State
+  const [showObservationModal, setShowObservationModal] = useState(false);
+  const [newObservation, setNewObservation] = useState("");
 
   // Simulator State
   const [simDE, setSimDE] = useState<number>(0);
@@ -100,7 +106,7 @@ export default function ReportPage() {
   const handleRecalculate = async () => {
     try {
       setRecalculating(true);
-      await recalculateScore(id);
+      await recalculateScore(id, undefined); // Pass undefined for observation when just recalculating
       await load();
     } catch (e: any) {
       alert(`Recalculation failed: ${e.message}`);
@@ -109,10 +115,25 @@ export default function ReportPage() {
     }
   };
 
+  const handleAddObservation = async () => {
+    if (!newObservation.trim()) return;
+    setRecalculating(true);
+    try {
+      const updatedData = await recalculateScore(id, newObservation);
+      setData({ ...data!, analysis: updatedData }); // data is definitely not null here
+      setShowObservationModal(false);
+      setNewObservation("");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
   if (loading || recalculating) {
     return (
       <div className="flex h-[80vh] items-center justify-center flex-col">
-        <Loader2 className="h-10 w-10 text-blue-600 animate-spin mb-4" />
+        <RefreshCw className="h-10 w-10 text-blue-600 animate-spin mb-4" />
         <h2 className="text-xl font-semibold">
           {recalculating
             ? "Azure OpenAI is re-evaluating the credit profile..."
@@ -757,21 +778,43 @@ export default function ReportPage() {
               </div>
             </div>
 
-            {/* DATA QUALITY EXCLUSIONS */}
-            {ans.data_quality_notes && ans.data_quality_notes.length > 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 shadow-sm">
-                <h3 className="text-sm font-bold text-amber-900 uppercase tracking-wide mb-3 flex items-center">
-                  <AlertTriangle className="h-4 w-4 mr-2" /> Epistemic Notes
+            {/* AI EPISTEMIC NOTES & ADD OBSERVATION */}
+            <div className="bg-white border rounded-xl p-6 shadow-sm">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold flex items-center">
+                  <Info className="mr-2 h-5 w-5 text-blue-600" /> AI Epistemic
+                  Notes
                 </h3>
-                <ul className="space-y-2">
-                  {ans.data_quality_notes.map((n, i) => (
-                    <li key={i} className="text-xs text-amber-800 leading-snug">
-                      • {n}
-                    </li>
-                  ))}
-                </ul>
+                <button
+                  onClick={() => setShowObservationModal(true)}
+                  className="flex items-center space-x-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Add Field Observation</span>
+                </button>
               </div>
-            )}
+              <ul className="space-y-4">
+                {(ans.data_quality_notes || []).map((n: string, i: number) => (
+                  <li key={i} className="text-xs text-slate-700 leading-snug">
+                    • {n}
+                  </li>
+                ))}
+                {(ans.field_observations || []).map((n: string, i: number) => (
+                  <li
+                    key={i}
+                    className="text-xs text-blue-700 leading-snug font-medium"
+                  >
+                    • {n}
+                  </li>
+                ))}
+                {ans.data_quality_notes?.length === 0 &&
+                  ans.field_observations?.length === 0 && (
+                    <p className="text-xs text-slate-400 italic">
+                      No epistemic notes or field observations.
+                    </p>
+                  )}
+              </ul>
+            </div>
 
             {/* UPLOADED DOCUMENTS */}
             <div className="bg-white border rounded-xl p-6 shadow-sm">
@@ -784,7 +827,7 @@ export default function ReportPage() {
                 </p>
               ) : (
                 <ul className="space-y-2">
-                  {documents.map((doc) => (
+                  {documents.map((doc: UploadedDocument) => (
                     <li
                       key={doc.id}
                       className="flex items-center justify-between py-2 border-b last:border-0"
@@ -820,9 +863,57 @@ export default function ReportPage() {
           </div>
         </div>
       </div>
+      {/* Field Observation Modal */}
+      {showObservationModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border">
+            <div className="p-6 border-b bg-slate-50">
+              <h3 className="text-lg font-bold flex items-center">
+                <Target className="mr-2 h-5 w-5 text-blue-600" />
+                Add Field Observation
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Voice notes will be appended to the primary insights and used to
+                recalculate the score.
+              </p>
+            </div>
+            <div className="p-6">
+              <SpeechTextArea
+                value={newObservation}
+                onChange={setNewObservation}
+                placeholder="Speak or type your site visit findings..."
+                label="Site Visit Observations"
+                sublabel="Speak to add real-time context"
+              />
+            </div>
+            <div className="p-6 bg-slate-50 border-t flex space-x-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowObservationModal(false);
+                  setNewObservation("");
+                }}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={!newObservation.trim() || recalculating}
+                onClick={handleAddObservation}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold flex items-center hover:bg-blue-700 disabled:opacity-50 shadow-md"
+              >
+                {recalculating ? (
+                  <>
+                    <RefreshCw className="animate-spin h-4 w-4 mr-2" />
+                    Analyzing...
+                  </>
+                ) : (
+                  "Add & Recalculate"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-// Icon Imports fix
-import { IndianRupee, Loader2 } from "lucide-react";

@@ -70,20 +70,37 @@ async def get_analysis_result(application_id: str, db: AsyncSession = Depends(ge
     return ans.raw_result
 
 @router.post("/{application_id}/recalculate")
-async def recalculate(application_id: str, db: AsyncSession = Depends(get_db)):
+async def recalculate(application_id: str, req: Optional[AnalyzeRequest] = None, db: AsyncSession = Depends(get_db)):
     ans_res = await db.execute(select(Analysis).where(Analysis.application_id == application_id))
     ans = ans_res.scalars().first()
     if ans:
         await db.delete(ans)
         await db.commit()
         
-    # rerun analysis with existing primary insights if any
+    # rerun analysis with existing primary insights plus any new ones
     ins_res = await db.execute(select(PrimaryInsight).where(PrimaryInsight.application_id == application_id).order_by(PrimaryInsight.created_at.desc()))
-    insight = ins_res.scalars().first()
+    existing_insight = ins_res.scalars().first()
     
-    req = AnalyzeRequest()
-    if insight:
-        req.officer_name = insight.officer_name
-        req.primary_insights_text = insight.notes_text
+    final_req = AnalyzeRequest()
+    if existing_insight:
+        final_req.officer_name = existing_insight.officer_name
+        final_req.primary_insights_text = existing_insight.notes_text
         
-    return await run_analysis(application_id, req, db)
+    if req and req.primary_insights_text:
+        # Append new observation
+        new_text = req.primary_insights_text
+        if final_req.primary_insights_text:
+            final_req.primary_insights_text += f"\n\n[Field Observation {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}]:\n{new_text}"
+        else:
+            final_req.primary_insights_text = new_text
+            
+        # Update/Create the record
+        new_ins = PrimaryInsight(
+            application_id=application_id,
+            officer_name=req.officer_name or final_req.officer_name,
+            notes_text=final_req.primary_insights_text
+        )
+        db.add(new_ins)
+        await db.commit()
+        
+    return await run_analysis(application_id, final_req, db)

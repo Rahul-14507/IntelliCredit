@@ -67,6 +67,7 @@ export interface AnalysisResult {
   strengths: string[];
   risks: string[];
   data_quality_notes: string[];
+  field_observations?: string[];
 }
 
 export interface ApplicationSummary {
@@ -144,9 +145,14 @@ export async function runAnalysis(
   return res.json();
 }
 
-export async function recalculateScore(id: string): Promise<AnalysisResult> {
+export async function recalculateScore(
+  id: string,
+  newInsight?: string,
+): Promise<AnalysisResult> {
   const res = await fetch(`${API_URL}/analyze/${id}/recalculate`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ primary_insights_text: newInsight }),
   });
   if (!res.ok) throw new Error("Recalculation failed");
   return res.json();

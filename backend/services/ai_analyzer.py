@@ -272,6 +272,9 @@ this structure. No preamble, no explanation, no markdown — just the JSON:
 
   "data_quality_notes": [
     "Note any important data that was missing or unclear in the uploaded documents"
+  ],
+  "field_observations": [
+    "List of any site visit or field observations provided by the officer"
   ]
 }}
 
