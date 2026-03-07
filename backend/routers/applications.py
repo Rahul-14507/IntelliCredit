@@ -72,6 +72,33 @@ async def get_application(id: str, db: AsyncSession = Depends(get_db)):
         "analysis": ans.raw_result if ans else None
     }
 
+@router.get("/{id}/documents")
+async def get_application_documents(id: str, db: AsyncSession = Depends(get_db)):
+    from backend.models import Document
+    res = await db.execute(
+        select(Document).where(Document.application_id == id).order_by(Document.created_at.asc())
+    )
+    docs = res.scalars().all()
+    return [
+        {
+            "id": d.id,
+            "filename": d.original_filename,
+            "extraction_status": d.extraction_status,
+            "created_at": d.created_at,
+        }
+        for d in docs
+    ]
+
+@router.get("/{id}/documents/{filename}")
+async def serve_document(id: str, filename: str, db: AsyncSession = Depends(get_db)):
+    import os
+    from fastapi.responses import FileResponse
+    from backend.config import settings
+    file_path = os.path.join(settings.UPLOAD_DIR, id, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(file_path, filename=filename)
+
 @router.delete("/{id}")
 async def delete_application(id: str, db: AsyncSession = Depends(get_db)):
     res = await db.execute(select(Application).where(Application.id == id))

@@ -17,7 +17,10 @@ services:
       DATABASE_URL: postgresql+asyncpg://postgres:password@postgres:5432/intellicredit
     env_file: .env
     depends_on: [postgres]
-    volumes: ["./uploads:/app/uploads"]
+    volumes:
+      - ./backend:/app/backend
+      - ./uploads:/app/uploads
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
     build: ./frontend

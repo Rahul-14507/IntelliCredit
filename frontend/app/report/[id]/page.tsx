@@ -30,6 +30,9 @@ import {
   getApplicationDetail,
   recalculateScore,
   getCAMUrl,
+  UploadedDocument,
+  getDocuments,
+  getDocumentUrl,
 } from "@/lib/api";
 import ScoreRadar from "@/components/ScoreRadar";
 import PromoterGraph from "@/components/PromoterGraph";
@@ -46,12 +49,20 @@ export default function ReportPage() {
   const [loading, setLoading] = useState(true);
   const [recalculating, setRecalculating] = useState(false);
   const [error, setError] = useState("");
+  const [documents, setDocuments] = useState<UploadedDocument[]>([]);
 
   const load = async () => {
     try {
       setLoading(true);
       const appData = await getApplicationDetail(id);
       setData(appData);
+      // Fetch documents separately so a failure won't break the report
+      try {
+        const docs = await getDocuments(id);
+        setDocuments(docs);
+      } catch {
+        setDocuments([]);
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -466,6 +477,51 @@ export default function ReportPage() {
                 </ul>
               </div>
             )}
+
+            {/* UPLOADED DOCUMENTS */}
+            <div className="bg-white border rounded-xl p-6 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-4 flex items-center">
+                <FileText className="h-4 w-4 mr-2" /> Uploaded Documents
+              </h3>
+              {documents.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">
+                  No documents uploaded.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {documents.map((doc) => (
+                    <li
+                      key={doc.id}
+                      className="flex items-center justify-between py-2 border-b last:border-0"
+                    >
+                      <div className="flex items-center min-w-0">
+                        <FileText className="h-4 w-4 shrink-0 text-slate-400 mr-2" />
+                        <a
+                          href={getDocumentUrl(id, doc.filename)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 hover:text-blue-800 hover:underline truncate font-medium"
+                          title={doc.filename}
+                        >
+                          {doc.filename}
+                        </a>
+                      </div>
+                      <span
+                        className={`ml-2 shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          doc.extraction_status === "done"
+                            ? "bg-green-100 text-green-700"
+                            : doc.extraction_status === "failed"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-slate-100 text-slate-500"
+                        }`}
+                      >
+                        {doc.extraction_status}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
       </div>

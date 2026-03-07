@@ -166,6 +166,30 @@ export async function getApplicationDetail(
   return res.json();
 }
 
+export interface UploadedDocument {
+  id: string;
+  filename: string;
+  extraction_status: string;
+  created_at: string;
+}
+
+export async function getDocuments(
+  application_id: string,
+): Promise<UploadedDocument[]> {
+  const res = await fetch(
+    `${API_URL}/applications/${application_id}/documents`,
+  );
+  if (!res.ok) throw new Error("Failed to fetch documents");
+  return res.json();
+}
+
+export function getDocumentUrl(
+  application_id: string,
+  filename: string,
+): string {
+  return `${API_URL}/applications/${application_id}/documents/${encodeURIComponent(filename)}`;
+}
+
 export async function deleteApplication(id: string): Promise<void> {
   const res = await fetch(`${API_URL}/applications/${id}`, {
     method: "DELETE",
