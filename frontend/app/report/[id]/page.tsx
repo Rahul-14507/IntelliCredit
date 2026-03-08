@@ -76,9 +76,9 @@ export default function ReportPage() {
       const appData = await getApplicationDetail(id);
       setData(appData);
 
-      // Initialize simulator values from actual metrics
+      // Initialize simulator values from actual metrics (guard against null analysis)
       const metrics =
-        appData.analysis.dimension_scores.financial_health?.key_metrics;
+        appData.analysis?.dimension_scores?.financial_health?.key_metrics;
       if (metrics) {
         setSimDE(metrics.debt_to_equity || 0);
         setSimCR(metrics.current_ratio || 0);
@@ -261,7 +261,7 @@ export default function ReportPage() {
             </p>
             <div className="flex items-baseline space-x-1">
               <span className="text-4xl font-black text-slate-800">
-                {summaryScore}
+                {Math.round(summaryScore || 0)}
               </span>
               <span className="text-sm font-bold text-slate-400">/ 100</span>
             </div>
@@ -286,7 +286,9 @@ export default function ReportPage() {
             </p>
             <div className="flex items-baseline space-x-1">
               <span className="text-4xl font-black text-slate-800">
-                {ans.lending_recommendation?.interest_rate_pct}%
+                {ans.lending_recommendation?.interest_rate_pct?.toFixed(1) ||
+                  "-"}
+                %
               </span>
               <span className="text-sm font-bold text-slate-400">Yield</span>
             </div>

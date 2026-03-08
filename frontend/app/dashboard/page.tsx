@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   Activity,
   Trash2,
+  Play,
 } from "lucide-react";
 import {
   ApplicationSummary,
@@ -197,7 +198,7 @@ export default function DashboardPage() {
                       ₹{app.requested_limit_crores} Cr
                     </td>
                     <td className="px-6 py-4 font-bold">
-                      {app.total_score || "-"}
+                      {app.total_score ? Math.round(app.total_score) : "-"}
                     </td>
                     <td className="px-6 py-4">
                       <GradeBadge grade={app.grade} />
@@ -218,9 +219,12 @@ export default function DashboardPage() {
                             View Report <ArrowRight className="ml-1 h-3 w-3" />
                           </button>
                         ) : (
-                          <span className="text-slate-400 italic text-xs">
-                            Processing...
-                          </span>
+                          <button
+                            onClick={() => router.push(`/report/${app.id}`)}
+                            className="text-amber-600 hover:text-amber-800 font-semibold inline-flex items-center text-xs"
+                          >
+                            <Play className="mr-1 h-3 w-3" /> Run Analysis
+                          </button>
                         )}
                         <button
                           onClick={(e) => handleDelete(app.id, e)}

@@ -310,23 +310,23 @@ this structure. No preamble, no explanation, no markdown — just the JSON:
   "data_quality_notes": [
     "Note any important data that was missing or unclear in the uploaded documents"
   ],
-  "document_consistency": {
-    "overall_consistency_score": integer 0-100,
+  "document_consistency": {{
+    "overall_consistency_score": "integer 0-100",
     "checks_performed": [
-      {
+      {{
         "check_name": "string",
         "document_a": "string",
         "document_b": "string", 
         "value_a": "string",
         "value_b": "string",
-        "variance_pct": number or null,
+        "variance_pct": "number or null",
         "status": "CONSISTENT or MINOR_VARIANCE or MAJOR_VARIANCE or UNABLE_TO_CHECK",
         "flag": "string explanation if variance detected"
-      }
+      }}
     ],
     "red_flags": ["list of serious inconsistencies only"],
     "summary": "1-2 sentences"
-  },
+  }},
   "field_observations": [
     "List of any site visit or field observations provided by the officer"
   ]

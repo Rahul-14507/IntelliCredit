@@ -182,7 +182,10 @@ export async function recalculateScore(
 }
 
 export async function getApplications(): Promise<ApplicationSummary[]> {
-  const res = await fetch(`${API_URL}/applications`);
+  const res = await fetch(`${API_URL}/applications`, {
+    cache: "no-store",
+    headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+  });
   if (!res.ok) throw new Error("Failed to fetch applications");
   return res.json();
 }
@@ -190,7 +193,10 @@ export async function getApplications(): Promise<ApplicationSummary[]> {
 export async function getApplicationDetail(
   id: string,
 ): Promise<ApplicationDetail> {
-  const res = await fetch(`${API_URL}/applications/${id}`);
+  const res = await fetch(`${API_URL}/applications/${id}`, {
+    cache: "no-store",
+    headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+  });
   if (!res.ok) throw new Error("Failed to fetch application detail");
   return res.json();
 }
