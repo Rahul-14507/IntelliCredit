@@ -2,16 +2,27 @@
 
 Next-Generation Credit Appraisal Engine v2, completely rebuilt to use an optimized single data pipeline with Azure Document Intelligence and Azure OpenAI GPT-4o.
 
-## Architecture
+## Key Features of V2
 
-The V2 architecture operates on one bulletproof flow:
+1. **Intelligent Ingestion:** Users upload unstructured financial documents (PDFs, images, Excel). Azure Document Intelligence extracts tables, text, and layout information.
+2. **"Voice-to-Insight" Field Notes:** Credit Officers can use the built-in browser microphone (Web Speech API) to dictate immediate field observations and risk constraints before analysis.
+3. **Deep AI Underwriting:** Azure OpenAI (GPT-4o) processes the complete document context + officer notes. It returns a fully structured JSON response containing:
+   - **Score & Grade:** 0-100 total score securely rounded.
+   - **5 C's Analysis:** Character, Capacity, Capital, Collateral, and Conditions.
+   - **Document Consistency Audit:** Cross-verifies PAN, GST turnover vs P&L revenue, and Director names across multiple documents. Highlights critical mismatches.
+   - **Lending Recommendation:** Final go/no-go, suggested limits, and interest rates.
+4. **Dynamic Recalculation:** Officers can iteratively add new insights and command the AI to re-evaluate the profile, instantly syncing the updated scores to the dashboard.
 
-1.  **Ingestion:** User uploads any document (PDF, Excel, images).
-2.  **Extraction:** Azure Document Intelligence extracts raw text, paragraphs, and tables as markdown. All extracted content is concatenated into a single `master_text`.
-3.  **Analysis:** A single, comprehensive call to Azure OpenAI (GPT-4o) performs the complete Five Cs credit analysis on the `master_text` and returns a highly-structured JSON object.
-4.  **Presentation:** The frontend React dashboard renders the scores, rationale, promoter network, and recommendations directly from the JSON. Detailed Word CAM documents are generated automatically.
+## System Architecture
 
-## Local Setup
+The V2 architecture operates on a modern, decoupled pipeline:
+
+- **Frontend:** Next.js 14, React Hook Form, TailwindCSS, `lucide-react` icons. Completely SSR/CSR optimized.
+- **Backend:** Python FastAPI, asynchronous endpoints, SQLAlchemy 2.0.
+- **Database:** PostgreSQL for structured data persistence (`applications`, `documents`, `analyses`).
+- **AI Integrations:**
+  - `@azure/ai-document-intelligence` for robust OCR.
+  - `openai` python SDK pointing to Azure GPT-4o deployments.
 
 ### 1. Prerequisites
 
