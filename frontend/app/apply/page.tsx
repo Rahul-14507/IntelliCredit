@@ -11,7 +11,7 @@ import {
   RefreshCw,
   ArrowRight,
 } from "lucide-react";
-import { createApplication, uploadDocuments, runAnalysis } from "@/lib/api";
+import { createEntity as createApplication, uploadDocs as uploadDocuments, runAnalysis } from "@/lib/api";
 import SpeechTextArea from "@/components/SpeechTextArea";
 
 export default function ApplyPage() {
@@ -45,7 +45,7 @@ export default function ApplyPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await createApplication({
+      const res: any = await createApplication({
         company_name: company.name,
         cin: company.cin,
         industry: company.industry,
@@ -80,7 +80,7 @@ export default function ApplyPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await uploadDocuments(appId, files);
+      const res: any = await uploadDocuments(appId, files);
       setDocStatuses(res.extraction_statuses);
       setExtractedLen(res.total_text_length);
 
@@ -103,7 +103,7 @@ export default function ApplyPage() {
   const handleStep3And4 = async () => {
     setStep(4);
     try {
-      await runAnalysis(appId, {
+      await (runAnalysis as any)(appId, {
         officer_name: insights.officer,
         primary_insights_text: insights.text,
       });

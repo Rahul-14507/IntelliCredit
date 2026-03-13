@@ -1,14 +1,20 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from backend.config import settings
-from backend.models import Base
+from sqlalchemy.orm import DeclarativeBase
+from config import settings
+import os
 
-engine = create_async_engine(settings.DATABASE_URL, echo=False)
-AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+os.makedirs(settings.upload_dir, exist_ok=True)
 
-async def create_tables():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+engine = create_async_engine(settings.database_url, echo=False)
+AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+class Base(DeclarativeBase):
+    pass
 
 async def get_db():
     async with AsyncSessionLocal() as session:
         yield session
+
+async def init_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)

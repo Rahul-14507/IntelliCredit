@@ -1,1056 +1,249 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import {
-  Download,
-  ArrowLeft,
-  ShieldAlert,
-  CheckCircle2,
-  RefreshCw,
-  TrendingUp,
-  AlertTriangle,
-  FileText,
-  Activity,
-  Target,
-  Info,
-  RotateCcw,
-  Plus,
-  Minus,
-  IndianRupee,
-  ShieldCheck,
-} from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-  LabelList,
-} from "recharts";
-
-import {
-  ApplicationDetail,
-  getApplicationDetail,
-  recalculateScore,
-  getCAMUrl,
-  UploadedDocument,
-  getDocuments,
-  getDocumentUrl,
-} from "@/lib/api";
-import ScoreRadar from "@/components/ScoreRadar";
-import PromoterGraph from "@/components/PromoterGraph";
-import DimensionBar from "@/components/DimensionBar";
-import CounterfactualCard from "@/components/CounterfactualCard";
-import LendingTermsCard from "@/components/LendingTermsCard";
-import SpeechTextArea from "@/components/SpeechTextArea";
+import { useState, useEffect, useCallback } from "react";
+import { useParams } from "next/navigation";
+import { getEntity, getAnalysis, getAnalysisStatus, runResearch, runAnalysis, exportDocx } from "@/lib/api";
+import { Entity, Analysis } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Loader2, Download, AlertTriangle, CheckCircle2, XCircle, ExternalLink, Info } from "lucide-react";
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts';
 
 export default function ReportPage() {
-  const params = useParams();
-  const router = useRouter();
-  const id = params.id as string;
-
-  const [data, setData] = useState<ApplicationDetail | null>(null);
+  const { id } = useParams();
+  const [entity, setEntity] = useState<Entity | null>(null);
+  const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [status, setStatus] = useState({ research_status: "pending", analysis_status: "pending" });
   const [loading, setLoading] = useState(true);
-  const [recalculating, setRecalculating] = useState(false);
-  const [error, setError] = useState("");
-  const [documents, setDocuments] = useState<UploadedDocument[]>([]);
 
-  // Field Observation Modal State
-  const [showObservationModal, setShowObservationModal] = useState(false);
-  const [newObservation, setNewObservation] = useState("");
-
-  // Simulator State
-  const [simDE, setSimDE] = useState<number>(0);
-  const [simCR, setSimCR] = useState<number>(0);
-  const [simEBITDA, setSimEBITDA] = useState<number>(0);
-  const [simGrowth, setSimGrowth] = useState<number>(0);
-  const [simICR, setSimICR] = useState<number>(0);
-
-  const load = async () => {
+  const fetchStatus = useCallback(async () => {
     try {
-      setLoading(true);
-      const appData = await getApplicationDetail(id);
-      setData(appData);
-
-      // Initialize simulator values from actual metrics (guard against null analysis)
-      const metrics =
-        appData.analysis?.dimension_scores?.financial_health?.key_metrics;
-      if (metrics) {
-        setSimDE(metrics.debt_to_equity || 0);
-        setSimCR(metrics.current_ratio || 0);
-        setSimEBITDA(metrics.ebitda_margin || 0);
-        setSimGrowth(metrics.revenue_growth || 0);
-        setSimICR(metrics.interest_coverage || 0);
+      const s: any = await getAnalysisStatus(id as string);
+      setStatus(s);
+      if (s.analysis_status === "done") {
+        const a: any = await getAnalysis(id as string);
+        setAnalysis(a);
       }
-      // Fetch documents separately so a failure won't break the report
-      try {
-        const docs = await getDocuments(id);
-        setDocuments(docs);
-      } catch {
-        setDocuments([]);
-      }
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (id) load();
+    } catch (e) { console.error(e); }
   }, [id]);
 
-  const handleRecalculate = async () => {
-    try {
-      setRecalculating(true);
-      await recalculateScore(id, undefined); // Pass undefined for observation when just recalculating
-      await load();
-    } catch (e: any) {
-      alert(`Recalculation failed: ${e.message}`);
-    } finally {
-      setRecalculating(false);
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const ent: any = await getEntity(id as string);
+        setEntity(ent);
+        const s: any = await getAnalysisStatus(id as string);
+        setStatus(s);
+
+        if (s.research_status === "not_started" || s.research_status === "pending") {
+          await runResearch(id as string);
+          setTimeout(() => runAnalysis(id as string), 2000);
+        }
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
+    };
+    init();
+  }, [id]);
+
+  useEffect(() => {
+    if (status.analysis_status !== "done" && status.analysis_status !== "error") {
+      const interval = setInterval(fetchStatus, 3000);
+      return () => clearInterval(interval);
     }
-  };
+  }, [status.analysis_status, fetchStatus]);
 
-  const handleAddObservation = async () => {
-    if (!newObservation.trim()) return;
-    setRecalculating(true);
-    try {
-      const updatedData = await recalculateScore(id, newObservation);
-      setData({ ...data!, analysis: updatedData }); // data is definitely not null here
-      setShowObservationModal(false);
-      setNewObservation("");
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setRecalculating(false);
-    }
-  };
+  if (loading) return <div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin h-10 w-10 text-primary" /></div>;
 
-  if (loading || recalculating) {
-    return (
-      <div className="flex h-[80vh] items-center justify-center flex-col">
-        <RefreshCw className="h-10 w-10 text-blue-600 animate-spin mb-4" />
-        <h2 className="text-xl font-semibold">
-          {recalculating
-            ? "Azure OpenAI is re-evaluating the credit profile..."
-            : "Compiling Synthetic Underwriting Model..."}
-        </h2>
-      </div>
-    );
-  }
-
-  if (error || !data || !data.analysis || !data.analysis.dimension_scores) {
-    return (
-      <div className="container mx-auto p-8 max-w-4xl text-center">
-        <div className="bg-red-50 border border-red-200 text-red-800 p-6 rounded-xl">
-          <AlertTriangle className="h-12 w-12 mx-auto mb-4" />
-          <h2 className="text-xl font-bold mb-2">Error Loading Report</h2>
-          <p>{error || "Analysis data not found."}</p>
-          <button
-            onClick={() => router.push("/dashboard")}
-            className="mt-4 underline"
-          >
-            Return to Dashboard
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const ans = data.analysis;
-  const dims = ans.dimension_scores || {};
-
-  const chartData = [
-    { name: "Financial Health", score: dims.financial_health?.score || 0 },
-    { name: "GST Consistency", score: dims.gst_consistency?.score || 0 },
-    { name: "Promoter Risk", score: dims.promoter_risk?.score || 0 },
-    { name: "Litigation/Reg.", score: dims.litigation_regulatory?.score || 0 },
-    { name: "Linguistic Stress", score: dims.linguistic_stress?.score || 0 },
-  ];
-
-  const summaryScore = ans.scoring?.total_score || 0;
-  const summaryGrade = ans.scoring?.grade || "D";
-  const recAction = ans.scoring?.recommended_action || "Reject";
-
-  const getGradeColor = (g: string) => {
-    if (g === "A") return "bg-green-100 text-green-800";
-    if (g === "B") return "bg-green-50 text-green-700";
-    if (g === "C") return "bg-orange-100 text-orange-800";
-    return "bg-red-100 text-red-800";
-  };
-
-  const getActionColor = (a: string) => {
-    if (a === "Approve") return "bg-green-600 hover:bg-green-700 text-white";
-    if (a === "Reject") return "bg-red-600 hover:bg-red-700 text-white";
-    return "bg-orange-600 hover:bg-orange-700 text-white";
+  const getRadarData = () => {
+    if (!analysis?.scores) return [];
+    return [
+      { subject: 'Financial', A: analysis.scores.financial_health, fullMark: 100 },
+      { subject: 'Assets', A: analysis.scores.asset_quality, fullMark: 100 },
+      { subject: 'Gov', A: analysis.scores.governance, fullMark: 100 },
+      { subject: 'Liquidity', A: analysis.scores.liquidity_alm, fullMark: 100 },
+      { subject: 'Market', A: analysis.scores.market_position, fullMark: 100 },
+    ];
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-800 pb-12 font-sans">
-      {/* HEADER */}
-      <div className="bg-white border-b sticky top-0 z-40 shadow-sm">
-        <div className="container mx-auto px-4 py-4 max-w-7xl flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => router.push("/dashboard")}
-              className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
+    <div className="max-w-6xl mx-auto py-10 px-4 space-y-8">
+      {/* Status Banner */}
+      {status.analysis_status !== "done" && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="pt-6 text-center">
+            <Loader2 className="animate-spin h-8 w-8 text-blue-500 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-blue-900">Credit Committee is Reviewing...</h2>
+            <p className="text-blue-700 text-sm mb-4">
+               {status.research_status === "running" ? "Gathering secondary research from Tavily..." : "Running GPT-4o Credit Reasoning Engine..."}
+            </p>
+            <Progress value={status.research_status === "done" ? 60 : 20} className="max-w-md mx-auto" />
+          </CardContent>
+        </Card>
+      )}
+
+      {analysis && (
+        <>
+          {/* Decision Header */}
+          <div className={`p-6 rounded-xl border-l-8 flex justify-between items-center shadow-lg ${
+            analysis.recommendation === "APPROVE" ? "bg-green-50 border-green-500 text-green-900" :
+            analysis.recommendation === "CONDITIONAL_APPROVE" ? "bg-amber-50 border-amber-500 text-amber-900" :
+            "bg-red-50 border-red-500 text-red-900"
+          }`}>
             <div>
-              <h1 className="text-2xl font-black text-slate-900 leading-tight tracking-tight">
-                {ans.company_name}
-              </h1>
-              <div className="flex items-center text-sm font-medium text-slate-500 mt-0.5 space-x-3">
-                <span className="flex items-center">
-                  <FileText className="h-3.5 w-3.5 mr-1" /> CIN {data.cin}
-                </span>
-                <span className="flex items-center">
-                  <TrendingUp className="h-3.5 w-3.5 mr-1" /> {data.industry}
-                </span>
-                <span className="flex items-center">
-                  <IndianRupee className="h-3.5 w-3.5 mr-1" /> Req Limit ₹
-                  {data.requested_limit_crores} Cr
-                </span>
-              </div>
+                <Badge variant="outline" className="mb-2 uppercase tracking-widest">{analysis.grade} GRADE</Badge>
+                <h1 className="text-4xl font-extrabold flex items-center gap-3">
+                    {analysis.recommendation === "APPROVE" && <CheckCircle2 className="h-10 w-10 text-green-600" />}
+                    {analysis.recommendation === "CONDITIONAL_APPROVE" && <Info className="h-10 w-10 text-amber-600" />}
+                    {analysis.recommendation === "REJECT" && <XCircle className="h-10 w-10 text-red-600" />}
+                    {analysis.recommendation?.replace("_", " ")}
+                </h1>
+                <p className="mt-2 text-lg opacity-80">Recommended Limit: <span className="font-bold">₹{analysis.recommended_limit_cr} Cr</span> at {analysis.recommended_rate_pct}%</p>
             </div>
+            <Button size="lg" className="h-16 px-8 gap-2 bg-slate-900" onClick={() => window.open(exportDocx(id as string))}>
+                <Download className="h-5 w-5" /> Download Docx Report
+            </Button>
           </div>
 
-          <div className="flex items-center space-x-3 w-full md:w-auto">
-            <button
-              onClick={handleRecalculate}
-              disabled={recalculating}
-              className="flex-1 md:flex-none border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 text-sm font-semibold rounded-md flex items-center justify-center transition-colors"
-            >
-              <RefreshCw className="mr-2 h-4 w-4" /> Recalculate Score
-            </button>
-            <a
-              href={getCAMUrl(id)}
-              download
-              className="flex-1 md:flex-none bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 text-sm font-semibold rounded-md flex items-center justify-center transition-colors shadow-sm"
-            >
-              <Download className="mr-2 h-4 w-4" /> Export CAM
-            </a>
-          </div>
-        </div>
-      </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left: Score & Rationale */}
+            <div className="lg:col-span-2 space-y-8">
+                <Card>
+                    <CardHeader><CardTitle>Executive Summary</CardTitle></CardHeader>
+                    <CardContent>
+                        <p className="text-lg leading-relaxed text-slate-700">{analysis.executive_summary}</p>
+                    </CardContent>
+                </Card>
 
-      <div className="container mx-auto px-4 py-6 max-w-7xl">
-        {/* TOP KPI CARDS */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white p-5 rounded-xl border shadow-sm relative overflow-hidden group">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-              Overall Grade
-            </p>
-            <div className="flex items-end">
-              <span className="text-4xl font-black">{summaryGrade}</span>
-            </div>
-            <div
-              className={`absolute -right-4 -bottom-4 h-24 w-24 rounded-full opacity-20 transition-transform group-hover:scale-110 ${getGradeColor(summaryGrade)}`}
-            ></div>
-          </div>
-
-          <div className="bg-white p-5 rounded-xl border shadow-sm relative overflow-hidden group">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-              Total Score
-            </p>
-            <div className="flex items-baseline space-x-1">
-              <span className="text-4xl font-black text-slate-800">
-                {Math.round(summaryScore || 0)}
-              </span>
-              <span className="text-sm font-bold text-slate-400">/ 100</span>
-            </div>
-            <div className="absolute -right-4 -bottom-4 h-24 w-24 rounded-full opacity-10 bg-blue-500 transition-transform group-hover:scale-110"></div>
-          </div>
-
-          <div className="bg-white p-5 rounded-xl border shadow-sm relative overflow-hidden group">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-              Rec. Limit
-            </p>
-            <div className="flex items-baseline space-x-1">
-              <span className="text-4xl font-black text-slate-800">
-                ₹{ans.lending_recommendation?.suggested_limit_crores}
-              </span>
-              <span className="text-sm font-bold text-slate-400">Cr</span>
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded-xl border shadow-sm relative overflow-hidden group">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-              Pricing
-            </p>
-            <div className="flex items-baseline space-x-1">
-              <span className="text-4xl font-black text-slate-800">
-                {ans.lending_recommendation?.interest_rate_pct?.toFixed(1) ||
-                  "-"}
-                %
-              </span>
-              <span className="text-sm font-bold text-slate-400">Yield</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-          {/* LEFT COLUMN: Summary & Scorecard */}
-          <div className="md:col-span-8 space-y-6">
-            {/* EXECUTIVE SUMMARY */}
-            <div className="bg-white p-6 rounded-xl border shadow-sm">
-              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-3 flex items-center">
-                <ShieldAlert className="h-4 w-4 mr-2" /> Executive Summary
-              </h3>
-              <p className="text-slate-700 leading-relaxed text-sm">
-                {ans.analysis_summary}
-              </p>
-            </div>
-
-            {/* AI SCORE BREAKDOWN (Recharts & Radar) */}
-            <div className="bg-white p-6 rounded-xl border shadow-sm">
-              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-6 flex items-center">
-                <Activity className="h-4 w-4 mr-2" /> Credit Profile Dimensions
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
-                {/* Bar Chart */}
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={chartData}
-                      margin={{ top: 20, right: 0, left: -25, bottom: 20 }}
-                    >
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        vertical={false}
-                        stroke="#e2e8f0"
-                      />
-                      <XAxis
-                        dataKey="name"
-                        angle={-45}
-                        textAnchor="end"
-                        height={60}
-                        tick={{ fill: "#64748b", fontSize: 11 }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        domain={[0, 100]}
-                        tick={{ fill: "#64748b", fontSize: 11 }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <Tooltip
-                        cursor={{ fill: "#f8fafc" }}
-                        contentStyle={{
-                          borderRadius: "8px",
-                          border: "1px solid #e2e8f0",
-                          boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                        }}
-                      />
-                      <Bar dataKey="score" radius={[4, 4, 0, 0]}>
-                        {chartData.map((e, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={
-                              e.score >= 80
-                                ? "#22c55e"
-                                : e.score >= 60
-                                  ? "#eab308"
-                                  : "#f97316"
-                            }
-                          />
+                <Card>
+                    <CardHeader><CardTitle>Reasoning Intelligence</CardTitle></CardHeader>
+                    <CardContent className="space-y-6">
+                        {analysis.reasoning_chain?.map((step, idx) => (
+                            <div key={idx} className="flex gap-4 border-l-2 border-slate-200 pl-6 relative">
+                                <div className="absolute -left-3 top-0 h-6 w-6 bg-slate-900 text-white rounded-full flex items-center justify-center text-[10px]">{step.step}</div>
+                                <div className="flex-1">
+                                    <div className="flex justify-between">
+                                        <h4 className="font-bold">{step.factor}</h4>
+                                        <Badge variant={step.signal === "POSITIVE" ? "default" : step.signal === "NEGATIVE" ? "destructive" : "secondary"}>
+                                            {step.signal}
+                                        </Badge>
+                                    </div>
+                                    <p className="text-sm mt-1 text-slate-600">{step.evidence}</p>
+                                    <div className="flex gap-4 mt-2 text-[10px] uppercase font-bold text-slate-400">
+                                         <span>Impact: {step.impact}</span>
+                                        <span>Weight: {step.weight}</span>
+                                    </div>
+                                </div>
+                            </div>
                         ))}
-                        <LabelList
-                          dataKey="score"
-                          position="top"
-                          style={{
-                            fill: "#475569",
-                            fontSize: 11,
-                            fontWeight: "bold",
-                          }}
-                        />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
+                    </CardContent>
+                </Card>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <Card className="bg-green-50/30">
+                        <CardHeader className="pb-2"><CardTitle className="text-sm">Strengths</CardTitle></CardHeader>
+                        <CardContent>
+                            <ul className="text-xs space-y-1 list-disc pl-4">
+                                {analysis.swot?.strengths.map((s: string, i: number) => <li key={i}>{s}</li>)}
+                            </ul>
+                        </CardContent>
+                    </Card>
+                     <Card className="bg-red-50/30">
+                        <CardHeader className="pb-2"><CardTitle className="text-sm">Weaknesses</CardTitle></CardHeader>
+                        <CardContent>
+                            <ul className="text-xs space-y-1 list-disc pl-4">
+                                {analysis.swot?.weaknesses.map((s: string, i: number) => <li key={i}>{s}</li>)}
+                            </ul>
+                        </CardContent>
+                    </Card>
                 </div>
-
-                {/* Radar Chart */}
-                <ScoreRadar dimensions={dims} />
-              </div>
-
-              <div className="space-y-1">
-                <DimensionBar
-                  label="Financial Health"
-                  desc="Assessment of profitability, leverage, and liquidity based on extracted tables"
-                  data={dims.financial_health}
-                />
-                <DimensionBar
-                  label="GST Consistency"
-                  desc="Variance analysis between modeled revenue and reported figures"
-                  data={dims.gst_consistency}
-                />
-                <DimensionBar
-                  label="Promoter Risk"
-                  desc="Director background analysis from provided documents"
-                  data={dims.promoter_risk}
-                />
-                <DimensionBar
-                  label="Litigation & Regulatory"
-                  desc="Scanning documents for mentions of adverse events"
-                  data={dims.litigation_regulatory}
-                />
-                <DimensionBar
-                  label="Linguistic Stress"
-                  desc="Textual analysis of tone, hedging, and uncertainty in management commentary"
-                  data={dims.linguistic_stress}
-                />
-              </div>
             </div>
 
-            {/* WHAT-IF SCENARIO SIMULATOR */}
-            <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 shadow-sm overflow-hidden relative">
-              <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-                <Target className="h-24 w-24 text-blue-900" />
-              </div>
-
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                <div>
-                  <h3 className="text-lg font-black text-blue-900 flex items-center">
-                    🎯 Scenario Simulator — Test Credit Conditions
-                  </h3>
-                  <p className="text-xs text-blue-700 font-medium">
-                    Adjust financial levers to see real-time impact on scoring
-                    and pricing.
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    const m =
-                      ans.dimension_scores.financial_health?.key_metrics;
-                    if (m) {
-                      setSimDE(m.debt_to_equity || 0);
-                      setSimCR(m.current_ratio || 0);
-                      setSimEBITDA(m.ebitda_margin || 0);
-                      setSimGrowth(m.revenue_growth || 0);
-                      setSimICR(m.interest_coverage || 0);
-                    }
-                  }}
-                  className="flex items-center text-xs font-bold text-blue-600 bg-white px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors shadow-sm"
-                >
-                  <RotateCcw className="h-3 w-3 mr-1.5" /> Reset to Actual
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                {/* Sliders */}
-                <div className="lg:col-span-7 space-y-5">
-                  {[
-                    {
-                      label: "Debt/Equity",
-                      val: simDE,
-                      set: setSimDE,
-                      min: 0.1,
-                      max: 5.0,
-                      step: 0.1,
-                      suffix: "",
-                      actual:
-                        ans.dimension_scores.financial_health?.key_metrics
-                          ?.debt_to_equity,
-                    },
-                    {
-                      label: "Current Ratio",
-                      val: simCR,
-                      set: setSimCR,
-                      min: 0.5,
-                      max: 3.0,
-                      step: 0.05,
-                      suffix: "",
-                      actual:
-                        ans.dimension_scores.financial_health?.key_metrics
-                          ?.current_ratio,
-                    },
-                    {
-                      label: "EBITDA Margin",
-                      val: simEBITDA,
-                      set: setSimEBITDA,
-                      min: 1,
-                      max: 50,
-                      step: 0.5,
-                      suffix: "%",
-                      actual:
-                        ans.dimension_scores.financial_health?.key_metrics
-                          ?.ebitda_margin,
-                    },
-                    {
-                      label: "Revenue Growth",
-                      val: simGrowth,
-                      set: setSimGrowth,
-                      min: -20,
-                      max: 50,
-                      step: 1,
-                      suffix: "%",
-                      actual:
-                        ans.dimension_scores.financial_health?.key_metrics
-                          ?.revenue_growth,
-                    },
-                    {
-                      label: "Interest Coverage",
-                      val: simICR,
-                      set: setSimICR,
-                      min: 0.5,
-                      max: 15,
-                      step: 0.1,
-                      suffix: "x",
-                      actual:
-                        ans.dimension_scores.financial_health?.key_metrics
-                          ?.interest_coverage,
-                    },
-                  ].map((s) => (
-                    <div key={s.label}>
-                      <div className="flex justify-between items-center mb-2">
-                        <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-                          {s.label}
-                        </label>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-500 font-bold uppercase">
-                            Actual: {s.actual}
-                            {s.suffix}
-                          </span>
-                          <span className="text-sm font-black text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-200 shadow-sm">
-                            {s.val}
-                            {s.suffix}
-                          </span>
+            {/* Right: Scores & Research */}
+            <div className="space-y-8">
+                <Card>
+                    <CardHeader><CardTitle>Scoring Matrix</CardTitle></CardHeader>
+                    <CardContent>
+                        <div className="h-[250px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={getRadarData()}>
+                                    <PolarGrid />
+                                    <PolarAngleAxis dataKey="subject" fontSize={12} />
+                                    <Radar name="IntelliCredit" dataKey="A" stroke="#0f172a" fill="#0f172a" fillOpacity={0.5} />
+                                </RadarChart>
+                            </ResponsiveContainer>
                         </div>
-                      </div>
-                      <input
-                        type="range"
-                        min={s.min}
-                        max={s.max}
-                        step={s.step}
-                        value={s.val}
-                        onChange={(e) => s.set(parseFloat(e.target.value))}
-                        className="w-full h-1.5 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                      />
-                    </div>
-                  ))}
-                  <p className="flex items-center text-[10px] text-blue-500 font-medium italic mt-4">
-                    <Info className="h-3 w-3 mr-1" /> Simulator uses extracted
-                    financial values. Other dimensions held constant.
-                  </p>
-                </div>
+                        <div className="text-center mt-4">
+                            <p className="text-3xl font-black text-slate-900">{analysis.scores?.overall}/100</p>
+                            <p className="text-xs text-muted-foreground uppercase font-bold tracking-widest">Overall Risk Score</p>
+                        </div>
+                    </CardContent>
+                </Card>
 
-                {/* Results Card */}
-                <div className="lg:col-span-5 bg-white rounded-2xl p-5 border border-blue-100 shadow-xl flex flex-col justify-between">
-                  {(() => {
-                    // Internal Logic for Simulation
-                    const sDE = (v: number) => {
-                      if (v < 0.75) return 95;
-                      if (v < 1.5) return 80;
-                      if (v < 2.5) return 60;
-                      if (v < 3.5) return 40;
-                      return 20;
-                    };
-                    const sCR = (v: number) => {
-                      if (v > 1.75) return 90;
-                      if (v >= 1.5) return 75;
-                      if (v >= 1.25) return 55;
-                      if (v >= 1.0) return 35;
-                      return 15;
-                    };
-                    const sEBITDA = (v: number) => {
-                      if (v > 30) return 95;
-                      if (v >= 20) return 80;
-                      if (v >= 12) return 65;
-                      if (v >= 5) return 40;
-                      return 20;
-                    };
-                    const sGrowth = (v: number) => {
-                      if (v > 20) return 95;
-                      if (v >= 10) return 80;
-                      if (v >= 5) return 65;
-                      if (v >= 0) return 50;
-                      return 20;
-                    };
-                    const sICR = (v: number) => {
-                      if (v > 8) return 95;
-                      if (v >= 5) return 80;
-                      if (v >= 3) return 65;
-                      if (v >= 1.5) return 45;
-                      return 20;
-                    };
-
-                    const simFH =
-                      sDE(simDE) * 0.25 +
-                      sCR(simCR) * 0.2 +
-                      sEBITDA(simEBITDA) * 0.25 +
-                      sGrowth(simGrowth) * 0.15 +
-                      sICR(simICR) * 0.15;
-
-                    const weights = { gst: 0.2, pr: 0.2, lr: 0.15, ls: 0.15 };
-                    const currentOverall =
-                      simFH * 0.3 +
-                      (dims.gst_consistency?.score || 0) * weights.gst +
-                      (dims.promoter_risk?.score || 0) * weights.pr +
-                      (dims.litigation_regulatory?.score || 0) * weights.lr +
-                      (dims.linguistic_stress?.score || 0) * weights.ls +
-                      (ans.scoring?.primary_insight_adjustment || 0);
-
-                    const finalScore = Math.round(currentOverall);
-                    const grade =
-                      finalScore >= 80
-                        ? "A"
-                        : finalScore >= 65
-                          ? "B"
-                          : finalScore >= 50
-                            ? "C"
-                            : "D";
-                    const rate = Math.min(
-                      18,
-                      9.5 + (100 - finalScore) * 0.08,
-                    ).toFixed(2);
-                    const delta = finalScore - (ans.scoring?.total_score || 0);
-
-                    return (
-                      <>
+                <Card className="border-slate-900/10">
+                    <CardHeader className="bg-slate-900 text-white rounded-t-lg py-4">
+                        <CardTitle className="text-md flex items-center gap-2">
+                           <Info className="h-4 w-4" /> Secondary Research
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-4 px-2">
                         <div className="space-y-4">
-                          <div className="flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-widest border-b pb-2 mb-4">
-                            <span>Simulated Outcome</span>
-                            <div
-                              className={`flex items-center px-2 py-0.5 rounded text-[10px] ${delta >= 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
-                            >
-                              {delta >= 0 ? (
-                                <Plus className="h-2 w-2 mr-1" />
-                              ) : (
-                                <Minus className="h-2 w-2 mr-1" />
-                              )}
-                              {Math.abs(delta)} pts from actual
+                            <div className="px-2">
+                                <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Sentiment Meter</p>
+                                <div className="flex items-center gap-2">
+                                    <Badge className={`${analysis.sentiment?.overall_sentiment === 'POSITIVE' ? 'bg-green-500' : analysis.sentiment?.overall_sentiment === 'NEGATIVE' ? 'bg-red-500' : 'bg-slate-500'}`}>
+                                        {analysis.sentiment?.overall_sentiment}
+                                    </Badge>
+                                    <Progress value={(analysis.sentiment?.sentiment_score || 0) * 100 + 50} className="h-1 flex-1" />
+                                </div>
                             </div>
-                          </div>
 
-                          <div className="space-y-4">
-                            <div>
-                              <p className="text-[10px] font-bold text-slate-500 uppercase">
-                                Simulated FH Score
-                              </p>
-                              <p className="text-xl font-black text-blue-600">
-                                {Math.round(simFH)}
-                              </p>
+                            {analysis.sentiment?.red_flags.length > 0 && (
+                                <div className="bg-red-50 border border-red-100 p-3 rounded-md mx-2">
+                                    <h5 className="text-[10px] font-bold text-red-700 uppercase flex items-center gap-1 mb-1">
+                                        <AlertTriangle className="h-3 w-3" /> Critical Red Flags
+                                    </h5>
+                                    <ul className="text-xs text-red-900 space-y-1">
+                                        {analysis.sentiment?.red_flags.map((f, i) => <li key={i}>• {f}</li>)}
+                                    </ul>
+                                </div>
+                            )}
+
+                            <div className="space-y-2 px-2">
+                                <p className="text-[10px] font-bold text-muted-foreground uppercase">Top News Matches (Tavily)</p>
+                                {analysis.news_results?.slice(0, 3).map((news, i) => (
+                                    <a key={i} href={news.url} target="_blank" className="block p-2 hover:bg-slate-50 rounded group transition-colors">
+                                        <p className="text-xs font-bold line-clamp-1 group-hover:text-blue-600">{news.title}</p>
+                                        <div className="flex justify-between items-center mt-1">
+                                            <span className="text-[9px] text-muted-foreground">{new URL(news.url).hostname}</span>
+                                            <ExternalLink className="h-2 w-2 opacity-0 group-hover:opacity-100" />
+                                        </div>
+                                    </a>
+                                ))}
                             </div>
-                            <div>
-                              <p className="text-[10px] font-bold text-slate-500 uppercase">
-                                Overall Score
-                              </p>
-                              <div className="flex items-baseline space-x-2">
-                                <span className="text-4xl font-black text-slate-900">
-                                  {finalScore}
-                                </span>
-                                <span className="text-sm font-bold text-slate-300">
-                                  / 100
-                                </span>
-                              </div>
-                            </div>
-                          </div>
                         </div>
+                    </CardContent>
+                </Card>
 
-                        <div className="grid grid-cols-2 gap-4 pt-4 border-t mt-4">
-                          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">
-                              Grade
-                            </p>
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-xs font-black ${getGradeColor(grade)}`}
-                            >
-                              {grade}
-                            </span>
-                          </div>
-                          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">
-                              Int. Rate
-                            </p>
-                            <span className="text-sm font-black text-slate-800">
-                              {rate}%
-                            </span>
-                          </div>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
-            </div>
-
-            {/* STRENGTHS & RISKS */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white p-6 rounded-xl border shadow-sm">
-                <h3 className="text-sm font-bold text-emerald-700 uppercase tracking-wide mb-4">
-                  Strengths to Maintain
-                </h3>
-                <ul className="space-y-3">
-                  {(ans.strengths || []).map((s, i) => (
-                    <li
-                      key={i}
-                      className="flex items-start text-sm text-slate-700"
-                    >
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500 mr-2 mt-0.5 shrink-0" />{" "}
-                      <span>{s}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="bg-white p-6 rounded-xl border shadow-sm">
-                <h3 className="text-sm font-bold text-rose-700 uppercase tracking-wide mb-4">
-                  Key Risks Identified
-                </h3>
-                <ul className="space-y-3">
-                  {(ans.risks || []).map((r, i) => (
-                    <li
-                      key={i}
-                      className="flex items-start text-sm text-slate-700"
-                    >
-                      <AlertTriangle className="h-4 w-4 text-rose-500 mr-2 mt-0.5 shrink-0" />{" "}
-                      <span>{r}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            {/* MCA PROMOTER NETWORK */}
-            <div className="bg-white p-6 rounded-xl border shadow-sm">
-              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-4 flex items-center">
-                <ShieldAlert className="h-4 w-4 mr-2" /> Director Network
-                Extracted
-              </h3>
-              <PromoterGraph
-                directors={ans.directors || []}
-                companyName={ans.company_name}
-              />
-            </div>
-
-            {/* DOCUMENT CONSISTENCY AUDIT */}
-            {ans.document_consistency && (
-              <div className="bg-white p-6 rounded-xl border shadow-sm">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide flex items-center">
-                    <ShieldCheck className="h-4 w-4 mr-2" /> Document
-                    Consistency Audit
-                  </h3>
-                  <div
-                    className={`flex items-center space-x-2 px-3 py-1 rounded-lg border font-bold text-sm ${
-                      ans.document_consistency.overall_consistency_score >= 85
-                        ? "bg-green-50 text-green-700 border-green-200"
-                        : ans.document_consistency.overall_consistency_score >=
-                            70
-                          ? "bg-amber-50 text-amber-700 border-amber-200"
-                          : "bg-red-50 text-red-700 border-red-200"
-                    }`}
-                  >
-                    <ShieldCheck className="h-4 w-4" />
-                    <span>
-                      Consistency Score:{" "}
-                      {ans.document_consistency.overall_consistency_score}
-                    </span>
-                  </div>
-                </div>
-
-                {ans.document_consistency.red_flags.length > 0 && (
-                  <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
-                    <h4 className="text-xs font-bold text-red-800 uppercase mb-2 flex items-center">
-                      <AlertTriangle className="h-3 w-3 mr-2" /> Serious
-                      Inconsistencies Detected
-                    </h4>
-                    <ul className="space-y-1">
-                      {ans.document_consistency.red_flags.map((flag, i) => (
-                        <li
-                          key={i}
-                          className="text-sm text-red-700 font-medium flex items-start"
-                        >
-                          <span className="mr-2">•</span> {flag}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                {analysis.triangulation?.inconsistencies.length > 0 && (
+                    <Card className="border-amber-200 bg-amber-50/50">
+                        <CardHeader className="pb-2"><CardTitle className="text-sm font-bold text-amber-900">Pipeline Conflicts</CardTitle></CardHeader>
+                        <CardContent>
+                            <ul className="text-xs space-y-2">
+                                {analysis.triangulation?.inconsistencies.map((inc: string, i: number) => (
+                                    <li key={i} className="flex gap-2">
+                                        <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                                        <span className="text-amber-900">{inc}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </CardContent>
+                    </Card>
                 )}
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b text-slate-400 font-bold uppercase text-[10px] tracking-wider">
-                        <th className="pb-3 pr-4">Check Name</th>
-                        <th className="pb-3 pr-4">Status</th>
-                        <th className="pb-3">Details</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {ans.document_consistency.checks_performed.map(
-                        (check, i) => (
-                          <tr
-                            key={i}
-                            className="group hover:bg-slate-50 transition-colors"
-                          >
-                            <td className="py-4 pr-4 align-top font-bold text-slate-700">
-                              {check.check_name}
-                            </td>
-                            <td className="py-4 pr-4 align-top">
-                              {(() => {
-                                switch (check.status) {
-                                  case "CONSISTENT":
-                                    return (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700">
-                                        ✓ Consistent
-                                      </span>
-                                    );
-                                  case "MINOR_VARIANCE":
-                                    return (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">
-                                        ⚠ Minor Variance
-                                      </span>
-                                    );
-                                  case "MAJOR_VARIANCE":
-                                    return (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700">
-                                        ✗ Major Variance
-                                      </span>
-                                    );
-                                  default:
-                                    return (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-500">
-                                        — Unable to Check
-                                      </span>
-                                    );
-                                }
-                              })()}
-                            </td>
-                            <td className="py-4 align-top">
-                              <div className="space-y-1">
-                                <p className="text-slate-600 text-xs">
-                                  {check.document_a}:{" "}
-                                  <span className="font-bold text-slate-900">
-                                    {check.value_a}
-                                  </span>
-                                </p>
-                                <p className="text-slate-600 text-xs">
-                                  {check.document_b}:{" "}
-                                  <span className="font-bold text-slate-900">
-                                    {check.value_b}
-                                  </span>
-                                </p>
-                                {check.variance_pct !== null && (
-                                  <p
-                                    className={`text-[10px] font-bold ${check.variance_pct > 10 ? "text-red-600" : "text-slate-500"}`}
-                                  >
-                                    Variance: {check.variance_pct}%
-                                  </p>
-                                )}
-                                {check.flag && (
-                                  <p className="text-[10px] text-red-600 italic font-medium mt-1">
-                                    Flag: {check.flag}
-                                  </p>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ),
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="mt-6 pt-4 border-t italic text-xs text-slate-500">
-                  <p>Summary: {ans.document_consistency.summary}</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* RIGHT COLUMN: Decision, Terms & Target Fixes */}
-          <div className="md:col-span-4 space-y-6">
-            {/* UNDERWRITING DECISION */}
-            <div className="bg-white border rounded-xl p-6 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-4">
-                System Recommendation
-              </h3>
-
-              <div
-                className={`w-full py-4 text-center rounded-md font-black text-xl mb-4 tracking-tight shadow-sm ${getGradeColor(summaryGrade)}`}
-              >
-                {recAction.toUpperCase()}
-              </div>
-
-              <p className="text-sm text-slate-600 mb-6 leading-relaxed">
-                Based on the Five Cs framework, financial score weighting, and
-                analysis of {ans.directors?.length || 0} extracted directors.
-              </p>
-
-              <button
-                className={`w-full py-3 rounded-md font-bold text-sm shadow-md transition-all ${getActionColor(recAction)}`}
-              >
-                Confirm Decision
-              </button>
-              <button className="w-full mt-3 py-2 rounded-md font-semibold text-sm text-slate-500 border border-slate-200 hover:bg-slate-50 transition-colors">
-                Apply Manual Override
-              </button>
-            </div>
-
-            {/* LENDING TERMS */}
-            <LendingTermsCard data={data} />
-
-            {/* TARGETED FIXES */}
-            <div className="bg-white border rounded-xl p-6 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-4 flex items-center">
-                <TrendingUp className="h-4 w-4 mr-2" /> Value-Add Opportunities
-              </h3>
-              <p className="text-xs text-slate-500 mb-4 pb-4 border-b">
-                Actionable counterfactuals generated by Azure OpenAI to optimize
-                the borrower's credit profile.
-              </p>
-
-              <div className="space-y-3">
-                {(ans.counterfactuals || []).map((cf, i) => (
-                  <CounterfactualCard key={i} cf={cf} />
-                ))}
-              </div>
-            </div>
-
-            {/* AI EPISTEMIC NOTES & ADD OBSERVATION */}
-            <div className="bg-white border rounded-xl p-6 shadow-sm">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold flex items-center">
-                  <Info className="mr-2 h-5 w-5 text-blue-600" /> AI Epistemic
-                  Notes
-                </h3>
-                <button
-                  onClick={() => setShowObservationModal(true)}
-                  className="flex items-center space-x-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>Add Field Observation</span>
-                </button>
-              </div>
-              <ul className="space-y-4">
-                {(ans.data_quality_notes || []).map((n: string, i: number) => (
-                  <li key={i} className="text-xs text-slate-700 leading-snug">
-                    • {n}
-                  </li>
-                ))}
-                {(ans.field_observations || []).map((n: string, i: number) => (
-                  <li
-                    key={i}
-                    className="text-xs text-blue-700 leading-snug font-medium"
-                  >
-                    • {n}
-                  </li>
-                ))}
-                {ans.data_quality_notes?.length === 0 &&
-                  ans.field_observations?.length === 0 && (
-                    <p className="text-xs text-slate-400 italic">
-                      No epistemic notes or field observations.
-                    </p>
-                  )}
-              </ul>
-            </div>
-
-            {/* UPLOADED DOCUMENTS */}
-            <div className="bg-white border rounded-xl p-6 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-4 flex items-center">
-                <FileText className="h-4 w-4 mr-2" /> Uploaded Documents
-              </h3>
-              {documents.length === 0 ? (
-                <p className="text-xs text-slate-400 italic">
-                  No documents uploaded.
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {documents.map((doc: UploadedDocument) => (
-                    <li
-                      key={doc.id}
-                      className="flex items-center justify-between py-2 border-b last:border-0"
-                    >
-                      <div className="flex items-center min-w-0">
-                        <FileText className="h-4 w-4 shrink-0 text-slate-400 mr-2" />
-                        <a
-                          href={getDocumentUrl(id, doc.filename)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-blue-600 hover:text-blue-800 hover:underline truncate font-medium"
-                          title={doc.filename}
-                        >
-                          {doc.filename}
-                        </a>
-                      </div>
-                      <span
-                        className={`ml-2 shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${
-                          doc.extraction_status === "done"
-                            ? "bg-green-100 text-green-700"
-                            : doc.extraction_status === "failed"
-                              ? "bg-red-100 text-red-700"
-                              : "bg-slate-100 text-slate-500"
-                        }`}
-                      >
-                        {doc.extraction_status}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
           </div>
-        </div>
-      </div>
-      {/* Field Observation Modal */}
-      {showObservationModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border">
-            <div className="p-6 border-b bg-slate-50">
-              <h3 className="text-lg font-bold flex items-center">
-                <Target className="mr-2 h-5 w-5 text-blue-600" />
-                Add Field Observation
-              </h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Voice notes will be appended to the primary insights and used to
-                recalculate the score.
-              </p>
-            </div>
-            <div className="p-6">
-              <SpeechTextArea
-                value={newObservation}
-                onChange={setNewObservation}
-                placeholder="Speak or type your site visit findings..."
-                label="Site Visit Observations"
-                sublabel="Speak to add real-time context"
-              />
-            </div>
-            <div className="p-6 bg-slate-50 border-t flex space-x-3 justify-end">
-              <button
-                onClick={() => {
-                  setShowObservationModal(false);
-                  setNewObservation("");
-                }}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                disabled={!newObservation.trim() || recalculating}
-                onClick={handleAddObservation}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold flex items-center hover:bg-blue-700 disabled:opacity-50 shadow-md"
-              >
-                {recalculating ? (
-                  <>
-                    <RefreshCw className="animate-spin h-4 w-4 mr-2" />
-                    Analyzing...
-                  </>
-                ) : (
-                  "Add & Recalculate"
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+        </>
       )}
     </div>
   );

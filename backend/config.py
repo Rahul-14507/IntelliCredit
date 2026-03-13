@@ -1,30 +1,21 @@
-import os
 from pydantic_settings import BaseSettings
+from typing import List
+import json
 
 class Settings(BaseSettings):
-    AZURE_OPENAI_ENDPOINT: str
-    AZURE_OPENAI_API_KEY: str
-    AZURE_OPENAI_DEPLOYMENT_NAME: str = "gpt-4o"
-    AZURE_OPENAI_API_VERSION: str = "2024-02-01"
-    
-    AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT: str
-    AZURE_DOCUMENT_INTELLIGENCE_KEY: str
-    
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:password@localhost:5432/intellicredit"
-    UPLOAD_DIR: str = "./uploads"
-    DEMO_MODE: bool = False
-    CORS_ORIGINS: str = "http://localhost:3000"
+    azure_openai_endpoint: str
+    azure_openai_key: str
+    azure_openai_deployment: str = "gpt-4o"
+    azure_di_endpoint: str
+    azure_di_key: str
+    tavily_api_key: str
+    database_url: str = "sqlite+aiosqlite:///./intellicredit.db"
+    upload_dir: str = "./uploads"
+    max_file_size_mb: int = 50
+    cors_origins: List[str] = ["http://localhost:3000"]
+    port: int = 8000
 
     class Config:
         env_file = ".env"
-        extra = "ignore"
 
-def get_settings() -> Settings:
-    try:
-        return Settings()
-    except Exception as e:
-        print(f"Error loading configuration: {e}")
-        raise ValueError("Missing required environment variables. Please check your .env file.")
-
-# Single instances
-settings = get_settings()
+settings = Settings()

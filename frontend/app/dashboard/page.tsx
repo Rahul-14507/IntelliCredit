@@ -13,12 +13,12 @@ import {
   Play,
 } from "lucide-react";
 import {
-  ApplicationSummary,
-  getApplications,
-  deleteApplication,
+  listEntities as getApplications,
+  deleteEntity as deleteApplication,
 } from "@/lib/api";
+import { Entity as ApplicationSummary } from "@/lib/types";
 
-function GradeBadge({ grade }: { grade?: string }) {
+function GradeBadge({ grade }: { grade?: string | null }) {
   if (!grade)
     return (
       <span className="px-2 py-1 rounded-full text-xs font-bold border bg-slate-100 text-slate-500">
@@ -49,7 +49,7 @@ export default function DashboardPage() {
 
   const fetchApps = async () => {
     try {
-      const data = await getApplications();
+      const data: any = await getApplications();
       setApps(data);
     } catch (e) {
       console.error(e);
@@ -179,7 +179,7 @@ export default function DashboardPage() {
                     colSpan={8}
                     className="text-center py-8 text-muted-foreground"
                   >
-                    No applications found. Click 'New Application' to begin.
+                    No applications found. Click &apos;New Application&apos; to begin.
                   </td>
                 </tr>
               ) : (

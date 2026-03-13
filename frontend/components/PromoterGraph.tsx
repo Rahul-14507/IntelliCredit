@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import ReactFlow, { Background, Controls, Node, Edge } from "reactflow";
 import "reactflow/dist/style.css";
-import { Director } from "@/lib/api";
+import { Director } from "@/lib/types";
 
 export default function PromoterGraph({
   directors,

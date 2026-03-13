@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { DimensionScore } from "@/lib/api";
+import { DimensionScore } from "@/lib/types";
 
 export default function DimensionBar({
   label,
