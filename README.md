@@ -1,6 +1,6 @@
 # IntelliCredit v2
 
-**Live Demo:** [https://intellicredit-frontend.jollystone-2e92c365.eastus.azurecontainerapps.io/](https://intellicredit-frontend.jollystone-2e92c365.eastus.azurecontainerapps.io/)
+[📺 Watch Demo Video](https://intellicredit-frontend.jollystone-2e92c365.eastus.azurecontainerapps.io/)
 
 Next-Generation Credit Appraisal Engine v2, completely rebuilt to use an optimized single data pipeline with Azure Document Intelligence and Azure OpenAI GPT-4o.
 
